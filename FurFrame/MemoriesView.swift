@@ -46,11 +46,9 @@ struct MemoriesView: View {
                         
                         // Hero Section
                         if let hero = heroAsset ?? assets.randomElement() {
-                            let heroIsSelected = selectedAsset?.localIdentifier == hero.localIdentifier
                             HeroSection(
                                 asset: hero,
                                 namespace: animation,
-                                isSelected: heroIsSelected,
                                 onTap: {
                                     withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                                         selectedAsset = hero
@@ -205,7 +203,6 @@ struct LimitedAccessBanner: View {
 struct HeroSection: View {
     let asset: PetAsset
     var namespace: Namespace.ID
-    var isSelected: Bool
     var onTap: () -> Void
     
     var body: some View {
@@ -219,7 +216,7 @@ struct HeroSection: View {
                 .aspectRatio(contentMode: .fill)
                 .frame(width: geo.size.width, height: geo.size.height)
                 .clipShape(RoundedRectangle(cornerRadius: .appRadiusXXLarge))
-                .matchedGeometryEffect(id: asset.localIdentifier, in: namespace, isSource: !isSelected)
+                .matchedGeometryEffect(id: asset.localIdentifier, in: namespace, isSource: false)
                 .onTapGesture(perform: onTap)
                 
                 // Gradient overlay

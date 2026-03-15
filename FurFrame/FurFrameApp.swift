@@ -15,6 +15,12 @@ struct FurFrameApp: App {
             PetAsset.self,
         ])
         
+        // Pre-create App Group directories to avoid CoreData warnings
+        if let appGroupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.furframe.app") {
+            let supportURL = appGroupURL.appendingPathComponent("Library/Application Support")
+            try? FileManager.default.createDirectory(at: supportURL, withIntermediateDirectories: true)
+        }
+        
         // Try to create ModelContainer with App Group first
         let appGroupConfig = ModelConfiguration(
             schema: schema,
