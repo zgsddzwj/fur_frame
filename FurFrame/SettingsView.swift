@@ -18,107 +18,76 @@ struct SettingsView: View {
     
     var body: some View {
         NavigationStack {
-            List {
-                // Pro Banner
-                if !isPro {
-                    ProBanner {
-                        showPaywall = true
-                    }
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                    .padding(.bottom, 8)
-                }
+            ZStack {
+                Color(hex: "F2F2F7").ignoresSafeArea()
                 
-                // LIBRARY Section
-                Section {
-                    NavigationLink {
-                        Text("Rescan View")
-                    } label: {
-                        HStack {
-                            Text("Rescan Photo Library")
-                                .font(.appBody)
-                            Spacer()
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 24) {
+                        // Pro Banner
+                        if !isPro {
+                            ProBanner {
+                                showPaywall = true
+                            }
                         }
-                    }
-                    
-                    NavigationLink {
-                        Text("Hidden Pets View")
-                    } label: {
-                        HStack {
-                            Text("Hidden Pets")
-                                .font(.appBody)
-                            Spacer()
-                            Text("0")
-                                .font(.appCallout)
-                                .foregroundColor(.appTextSecondary)
+                        
+                        // LIBRARY Section
+                        SettingsSection(title: "LIBRARY") {
+                            SettingsRow(title: "Rescan Photo Library", icon: nil) {
+                                // Rescan action
+                            }
+                            
+                            Divider().padding(.leading, 16)
+                            
+                            SettingsRow(title: "Hidden Pets", value: "0") {
+                                // Hidden pets action
+                            }
                         }
-                    }
-                } header: {
-                    Text("LIBRARY")
-                        .font(.appCaptionMedium)
-                        .foregroundColor(.appTextSecondary)
-                } footer: {
-                    Text("Re-scanning securely processes photos locally on your device without using the internet.")
-                        .font(.appCaption)
-                        .foregroundColor(.appTextSecondary)
-                        .padding(.top, 4)
-                }
-                
-                // ACCOUNT Section
-                Section {
-                    Button("Restore Purchases") {
-                        // Restore logic
-                    }
-                    .font(.appBody)
-                    .foregroundColor(.appTextPrimary)
-                    
-                    Button("Manage Subscription") {
-                        // Open App Store subscription management
-                        if let url = URL(string: "itms-apps://apps.apple.com/account/subscriptions") {
-                            UIApplication.shared.open(url)
+                        
+                        Text("Re-scanning securely processes photos locally on your device without using the internet.")
+                            .font(.appCaption)
+                            .foregroundColor(.appTextSecondary)
+                            .padding(.horizontal, 16)
+                            .padding(.top, -12)
+                        
+                        // ACCOUNT Section
+                        SettingsSection(title: "ACCOUNT") {
+                            SettingsRow(title: "Restore Purchases", icon: nil) {
+                                // Restore action
+                            }
+                            
+                            Divider().padding(.leading, 16)
+                            
+                            SettingsRow(title: "Manage Subscription", icon: nil) {
+                                if let url = URL(string: "itms-apps://apps.apple.com/account/subscriptions") {
+                                    UIApplication.shared.open(url)
+                                }
+                            }
                         }
-                    }
-                    .font(.appBody)
-                    .foregroundColor(.appTextPrimary)
-                } header: {
-                    Text("ACCOUNT")
-                        .font(.appCaptionMedium)
-                        .foregroundColor(.appTextSecondary)
-                }
-                
-                // ABOUT Section
-                Section {
-                    Button("Contact Support") {
-                        // Open support
-                    }
-                    .font(.appBody)
-                    .foregroundColor(.appTextPrimary)
-                    
-                    Button("Privacy Policy") {
-                        // Open privacy policy
-                    }
-                    .font(.appBody)
-                    .foregroundColor(.appTextPrimary)
-                } header: {
-                    Text("ABOUT")
-                        .font(.appCaptionMedium)
-                        .foregroundColor(.appTextSecondary)
-                }
-                
-                // Version
-                Section {
-                    HStack {
-                        Spacer()
+                        
+                        // ABOUT Section
+                        SettingsSection(title: "ABOUT") {
+                            SettingsRow(title: "Contact Support", icon: nil) {
+                                // Contact action
+                            }
+                            
+                            Divider().padding(.leading, 16)
+                            
+                            SettingsRow(title: "Privacy Policy", icon: nil) {
+                                // Privacy action
+                            }
+                        }
+                        
+                        // Version
                         Text("FurFrame v1.0.0")
                             .font(.appCaption)
                             .foregroundColor(.appTextTertiary)
-                        Spacer()
+                            .padding(.top, 8)
                     }
-                    .listRowBackground(Color.clear)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 34)
                 }
             }
-            .listStyle(.insetGrouped)
-            .background(Color.appSecondaryBackground.ignoresSafeArea())
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -165,8 +134,8 @@ struct ProBanner: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white.opacity(0.8))
             }
-            .padding(.horizontal, .appSpacingLarge)
-            .padding(.vertical, .appSpacingMedium)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
             .background(
                 LinearGradient(
                     colors: [Color(hex: "FF6B35"), Color(hex: "EC4899")],
@@ -174,8 +143,60 @@ struct ProBanner: View {
                     endPoint: .trailing
                 )
             )
-            .cornerRadius(.appRadiusXLarge)
-            .padding(.horizontal, .appSpacingLarge)
+            .cornerRadius(16)
+        }
+    }
+}
+
+// MARK: - Settings Section
+struct SettingsSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.appCaptionMedium)
+                .foregroundColor(.appTextSecondary)
+                .padding(.horizontal, 8)
+            
+            VStack(spacing: 0) {
+                content
+            }
+            .background(Color.white)
+            .cornerRadius(12)
+        }
+    }
+}
+
+// MARK: - Settings Row
+struct SettingsRow: View {
+    let title: String
+    var value: String? = nil
+    var icon: String? = nil
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Text(title)
+                    .font(.appBody)
+                    .foregroundColor(.appTextPrimary)
+                
+                Spacer()
+                
+                if let value = value {
+                    Text(value)
+                        .font(.appCallout)
+                        .foregroundColor(.appTextSecondary)
+                }
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.appTextTertiary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
         }
     }
 }
