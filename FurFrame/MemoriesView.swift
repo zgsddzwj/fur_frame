@@ -420,7 +420,7 @@ struct FullScreenImageView: View {
                             }
                         }
                 )
-                .matchedGeometryEffect(id: asset.localIdentifier, in: namespace)
+                .matchedGeometryEffect(id: asset.localIdentifier, in: namespace, isSource: true)
             
             // Top Bar
             VStack {
