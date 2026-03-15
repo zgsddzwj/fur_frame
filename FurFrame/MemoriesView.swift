@@ -46,11 +46,17 @@ struct MemoriesView: View {
                         
                         // Hero Section
                         if let hero = heroAsset ?? assets.randomElement() {
-                            HeroSection(asset: hero, namespace: animation, onTap: {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                                    selectedAsset = hero
+                            let heroIsSelected = selectedAsset?.localIdentifier == hero.localIdentifier
+                            HeroSection(
+                                asset: hero,
+                                namespace: animation,
+                                isSelected: heroIsSelected,
+                                onTap: {
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                        selectedAsset = hero
+                                    }
                                 }
-                            })
+                            )
                             .padding(.horizontal, .appSpacingLarge)
                             .padding(.top, .appSpacingMedium)
                         }
@@ -69,13 +75,19 @@ struct MemoriesView: View {
                         if assets.isEmpty {
                             EmptyGridView()
                         } else {
-                            MasonryGrid(assets: assets, namespace: animation) { asset in
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                                    selectedAsset = asset
+                            MasonryGrid(
+                                assets: assets,
+                                namespace: animation,
+                                selectedAssetId: selectedAsset?.localIdentifier,
+                                validateAsset: { asset in
+                                    validateAsset(asset)
+                                },
+                                onTap: { asset in
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                        selectedAsset = asset
+                                    }
                                 }
-                            } validateAsset: { asset in
-                                validateAsset(asset)
-                            }
+                            )
                         }
                     }
                     .padding(.bottom, .appSpacingLarge)
@@ -193,6 +205,7 @@ struct LimitedAccessBanner: View {
 struct HeroSection: View {
     let asset: PetAsset
     var namespace: Namespace.ID
+    var isSelected: Bool
     var onTap: () -> Void
     
     var body: some View {
@@ -206,7 +219,7 @@ struct HeroSection: View {
                 .aspectRatio(contentMode: .fill)
                 .frame(width: geo.size.width, height: geo.size.height)
                 .clipShape(RoundedRectangle(cornerRadius: .appRadiusXXLarge))
-                .matchedGeometryEffect(id: asset.localIdentifier, in: namespace)
+                .matchedGeometryEffect(id: asset.localIdentifier, in: namespace, isSource: !isSelected)
                 .onTapGesture(perform: onTap)
                 
                 // Gradient overlay
@@ -283,8 +296,9 @@ struct EmptyGridView: View {
 struct MasonryGrid: View {
     let assets: [PetAsset]
     var namespace: Namespace.ID
-    var onTap: (PetAsset) -> Void
+    var selectedAssetId: String?
     var validateAsset: (PetAsset) -> Void
+    var onTap: (PetAsset) -> Void
     
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -293,13 +307,25 @@ struct MasonryGrid: View {
             
             VStack(spacing: 8) {
                 ForEach(leftColumn) { asset in
-                    PetCard(asset: asset, namespace: namespace, onTap: onTap, validateAsset: validateAsset)
+                    PetCard(
+                        asset: asset,
+                        namespace: namespace,
+                        isSelected: selectedAssetId == asset.localIdentifier,
+                        validateAsset: validateAsset,
+                        onTap: onTap
+                    )
                 }
             }
             
             VStack(spacing: 8) {
                 ForEach(rightColumn) { asset in
-                    PetCard(asset: asset, namespace: namespace, onTap: onTap, validateAsset: validateAsset)
+                    PetCard(
+                        asset: asset,
+                        namespace: namespace,
+                        isSelected: selectedAssetId == asset.localIdentifier,
+                        validateAsset: validateAsset,
+                        onTap: onTap
+                    )
                 }
             }
         }
@@ -311,16 +337,18 @@ struct MasonryGrid: View {
 struct PetCard: View {
     let asset: PetAsset
     var namespace: Namespace.ID
-    var onTap: (PetAsset) -> Void
+    var isSelected: Bool
     var validateAsset: (PetAsset) -> Void
+    var onTap: (PetAsset) -> Void
     @Environment(\.modelContext) private var modelContext
     @State private var height: CGFloat = 0
     
-    init(asset: PetAsset, namespace: Namespace.ID, onTap: @escaping (PetAsset) -> Void, validateAsset: @escaping (PetAsset) -> Void) {
+    init(asset: PetAsset, namespace: Namespace.ID, isSelected: Bool, validateAsset: @escaping (PetAsset) -> Void, onTap: @escaping (PetAsset) -> Void) {
         self.asset = asset
         self.namespace = namespace
-        self.onTap = onTap
+        self.isSelected = isSelected
         self.validateAsset = validateAsset
+        self.onTap = onTap
         let seed = asset.localIdentifier.hashValue
         self._height = State(initialValue: CGFloat(160 + (abs(seed) % 120)))
     }
@@ -332,7 +360,7 @@ struct PetCard: View {
                 .frame(minWidth: 0, maxWidth: .infinity)
                 .frame(height: height)
                 .clipShape(RoundedRectangle(cornerRadius: .appRadiusLarge))
-                .matchedGeometryEffect(id: asset.localIdentifier, in: namespace)
+                .matchedGeometryEffect(id: asset.localIdentifier, in: namespace, isSource: !isSelected)
                 .onTapGesture {
                     onTap(asset)
                 }
