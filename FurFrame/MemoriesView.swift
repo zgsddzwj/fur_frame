@@ -17,7 +17,10 @@ struct MemoriesView: View {
     @State private var selectedAsset: PetAsset?
     @State private var isPhotoLibraryLimited = false
     @State private var showSettings = false
+    @State private var showStudio = false
     @State private var scrollOffset: CGFloat = 0
+    @State private var isScanning = false
+    @State private var scanProgress = 0.0
     
     private let columns = [
         GridItem(.flexible(), spacing: 8),
@@ -70,8 +73,12 @@ struct MemoriesView: View {
                         .padding(.bottom, .appSpacingMedium)
                         
                         // Masonry Grid
-                        if assets.isEmpty {
-                            EmptyGridView()
+                        if isScanning {
+                            ScanningProgressView(progress: scanProgress)
+                        } else if assets.isEmpty {
+                            EmptyGridView {
+                                self.startRescan()
+                            }
                         } else {
                             MasonryGrid(
                                 assets: assets,
@@ -101,7 +108,7 @@ struct MemoriesView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 16) {
                         Button {
-                            // Widget grid view
+                            showStudio = true
                         } label: {
                             Image(systemName: "square.grid.2x2")
                                 .font(.system(size: 20))
@@ -120,27 +127,28 @@ struct MemoriesView: View {
             }
             .toolbarBackground(scrollOffset < -100 ? .visible : .hidden, for: .navigationBar)
             .toolbarBackground(.white, for: .navigationBar)
-            .sheet(isPresented: $showSettings) {
+            .fullScreenCover(isPresented: $showSettings) {
                 SettingsView()
             }
-            .overlay {
-                if let selected = selectedAsset {
-                    FullScreenImageView(
-                        asset: selected,
-                        namespace: animation,
-                        onSetAsHero: {
-                            withAnimation(.spring()) {
-                                heroAsset = selected
-                            }
-                        },
-                        onClose: {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
-                                selectedAsset = nil
-                            }
+            .fullScreenCover(isPresented: $showStudio) {
+                WidgetStudioView()
+            }
+            .fullScreenCover(item: $selectedAsset) { asset in
+                FullScreenImageView(
+                    asset: asset,
+                    namespace: animation,
+                    onSetAsHero: {
+                        withAnimation(.spring()) {
+                            heroAsset = asset
                         }
-                    )
-                    .transition(.opacity)
-                }
+                    },
+                    onClose: {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                            selectedAsset = nil
+                        }
+                    }
+                )
+                .transition(.opacity)
             }
         }
         .onAppear {
@@ -160,6 +168,61 @@ struct MemoriesView: View {
         let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [asset.localIdentifier], options: nil)
         if fetchResult.firstObject == nil {
             modelContext.delete(asset)
+        }
+    }
+    
+    private func startRescan() {
+        guard !isScanning else { return }
+        
+        isScanning = true
+        scanProgress = 0.0
+        
+        Task { [self] in
+            let scanner = PetScanner(modelContext: modelContext)
+            
+            // 监听进度
+            let progressTask = Task { [self] in
+                while isScanning {
+                    await MainActor.run {
+                        self.scanProgress = scanner.progress
+                    }
+                    try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                }
+            }
+            
+            await scanner.startScan(incremental: false)
+            
+            // 扫描完成
+            progressTask.cancel()
+            await MainActor.run {
+                self.isScanning = false
+                self.scanProgress = 1.0
+            }
+        }
+    }
+}
+
+// MARK: - Scanning Progress View
+struct ScanningProgressView: View {
+    let progress: Double
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Spacer().frame(height: 100)
+            
+            ProgressView()
+                .scaleEffect(1.5)
+                .tint(.appOrange)
+            
+            Text("Scanning Photos...")
+                .font(.appHeadline3)
+                .foregroundColor(.appTextPrimary)
+            
+            Text("\(Int(progress * 100))%")
+                .font(.appCallout)
+                .foregroundColor(.appTextSecondary)
+            
+            Spacer()
         }
     }
 }
@@ -206,66 +269,68 @@ struct HeroSection: View {
     var onTap: () -> Void
     
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .bottomLeading) {
-                // Image
-                PHAssetImage(
-                    localIdentifier: asset.localIdentifier,
-                    targetSize: CGSize(width: geo.size.width * 2, height: geo.size.height * 2)
-                )
-                .aspectRatio(contentMode: .fill)
-                .frame(width: geo.size.width, height: geo.size.height)
-                .clipShape(RoundedRectangle(cornerRadius: .appRadiusXXLarge))
-                .matchedGeometryEffect(id: asset.localIdentifier, in: namespace, isSource: false)
-                .onTapGesture(perform: onTap)
-                
-                // Gradient overlay
-                LinearGradient(
-                    colors: [.black.opacity(0.6), .clear],
-                    startPoint: .bottom,
-                    endPoint: .center
-                )
-                .frame(height: geo.size.height * 0.4)
-                .clipShape(RoundedRectangle(cornerRadius: .appRadiusXXLarge))
-                
-                // Content
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Golden Hour")
-                            .font(.appHeadline2)
-                            .foregroundColor(.white)
-                        
-                        Text(asset.creationDate.formatted(date: .abbreviated, time: .omitted))
-                            .font(.appCallout)
-                            .foregroundColor(.white.opacity(0.8))
-                    }
+        ZStack(alignment: .bottomLeading) {
+            // Image - 固定高度，限制裁剪区域防止长图撑满
+            PHAssetImage(
+                localIdentifier: asset.localIdentifier,
+                targetSize: CGSize(width: 800, height: 600)
+            )
+            .aspectRatio(contentMode: .fill)
+            .frame(height: 280)
+            .frame(maxWidth: .infinity)
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: .appRadiusXXLarge))
+            .onTapGesture(perform: onTap)
+            
+            // Gradient overlay
+            LinearGradient(
+                colors: [.black.opacity(0.6), .clear],
+                startPoint: .bottom,
+                endPoint: .center
+            )
+            .frame(height: 140)
+            .clipShape(RoundedRectangle(cornerRadius: .appRadiusXXLarge))
+            
+            // Content
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Golden Hour")
+                        .font(.appHeadline2)
+                        .foregroundColor(.white)
                     
-                    Spacer()
-                    
-                    // Favorite button
-                    Button {
-                        withAnimation(.spring()) {
-                            asset.isFavorite.toggle()
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        }
-                    } label: {
-                        Image(systemName: asset.isFavorite ? "heart.fill" : "heart")
-                            .font(.system(size: 20))
-                            .foregroundColor(asset.isFavorite ? .appError : .white)
-                            .padding(12)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
-                    }
+                    Text(asset.creationDate.formatted(date: .abbreviated, time: .omitted))
+                        .font(.appCallout)
+                        .foregroundColor(.white.opacity(0.8))
                 }
-                .padding(20)
+                
+                Spacer()
+                
+                // Favorite button
+                Button {
+                    withAnimation(.spring()) {
+                        asset.isFavorite.toggle()
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    }
+                } label: {
+                    Image(systemName: asset.isFavorite ? "heart.fill" : "heart")
+                        .font(.system(size: 20))
+                        .foregroundColor(asset.isFavorite ? .appError : .white)
+                        .padding(12)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
+                }
             }
+            .padding(20)
         }
-        .frame(height: UIScreen.main.bounds.height / 3)
+        .frame(height: 280)
+        .frame(maxWidth: .infinity)
     }
 }
 
 // MARK: - Empty Grid View
 struct EmptyGridView: View {
+    var onRescan: () -> Void
+    
     var body: some View {
         VStack(spacing: 20) {
             Spacer().frame(height: 60)
@@ -283,6 +348,23 @@ struct EmptyGridView: View {
                 .foregroundColor(.appTextTertiary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
+            
+            Button {
+                onRescan()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.clockwise")
+                    Text("Rescan Photo Library")
+                }
+                .font(.appCalloutMedium)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(Color.appOrange)
+                .cornerRadius(.appRadiusCapsule)
+            }
+            .padding(.horizontal, 40)
+            .padding(.top, 20)
             
             Spacer()
         }
@@ -392,109 +474,172 @@ struct FullScreenImageView: View {
     
     @State private var scale: CGFloat = 1.0
     @State private var lastScale: CGFloat = 1.0
+    @State private var fullImage: UIImage?
+    @State private var isLoadingFullImage = false
     
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            // 全黑背景，阻止点击穿透
+            Color.black
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
             
-            // Image
-            PHAssetImage(localIdentifier: asset.localIdentifier, targetSize: PHImageManagerMaximumSize)
-                .aspectRatio(contentMode: .fit)
-                .scaleEffect(scale)
-                .gesture(
-                    MagnificationGesture()
-                        .onChanged { value in
-                            let delta = value / lastScale
-                            lastScale = value
-                            scale *= delta
-                        }
-                        .onEnded { _ in
-                            lastScale = 1.0
-                            if scale < 1.0 {
-                                withAnimation(.spring()) {
-                                    scale = 1.0
-                                }
+            // Image - 使用 aspectFit 模式加载原图
+            PHAssetImage(
+                localIdentifier: asset.localIdentifier,
+                targetSize: PHImageManagerMaximumSize,
+                contentMode: .aspectFit
+            )
+            .aspectRatio(contentMode: .fit)
+            .scaleEffect(scale)
+            .gesture(
+                MagnificationGesture()
+                    .onChanged { value in
+                        let delta = value / lastScale
+                        lastScale = value
+                        scale *= delta
+                    }
+                    .onEnded { _ in
+                        lastScale = 1.0
+                        if scale < 1.0 {
+                            withAnimation(.spring()) {
+                                scale = 1.0
                             }
                         }
-                )
-                .matchedGeometryEffect(id: asset.localIdentifier, in: namespace, isSource: true)
-            
-            // Top Bar
-            VStack {
-                HStack {
-                    Button(action: onClose) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(12)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
                     }
-                    
-                    Spacer()
-                    
-                    Text(asset.creationDate.formatted(date: .long, time: .omitted))
-                        .font(.appCalloutMedium)
+            )
+            .onAppear {
+                // 预加载高清原图用于分享
+                preloadFullImage()
+            }
+        }
+        .overlay(alignment: .top) {
+            // Top Bar - 使用 safeAreaInset 布局
+            HStack {
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.white)
+                        .padding(12)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
                 }
-                .padding(.horizontal)
-                .padding(.top, 16)
                 
                 Spacer()
                 
-                // Bottom Glass Bar
-                HStack(spacing: 0) {
-                    Button {
-                        shareAsset(asset)
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "arrow.up.square")
-                            Text("Share")
-                        }
-                        .font(.appCalloutMedium)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
+                Text(asset.creationDate.formatted(date: .long, time: .omitted))
+                    .font(.appCalloutMedium)
+                    .foregroundColor(.white)
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+            .padding(.bottom, 16)
+            .background(
+                LinearGradient(
+                    colors: [.black.opacity(0.5), .clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea(edges: .top)
+            )
+        }
+        .overlay(alignment: .bottom) {
+            // Bottom Glass Bar
+            HStack(spacing: 0) {
+                Button {
+                    shareAsset(asset)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.up.square")
+                        Text("Share")
                     }
-                    
-                    Divider()
-                        .background(Color.white.opacity(0.3))
-                        .frame(height: 24)
-                    
-                    Button {
-                        onSetAsHero()
-                        onClose()
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "photo.on.rectangle.angled")
-                            Text("Set as Hero")
-                        }
-                        .font(.appCalloutMedium)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                    }
+                    .font(.appCalloutMedium)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
                 }
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: .appRadiusXLarge))
-                .padding(.horizontal, .appSpacingLarge)
-                .padding(.bottom, 34)
+                
+                Divider()
+                    .background(Color.white.opacity(0.3))
+                    .frame(height: 24)
+                
+                Button {
+                    onSetAsHero()
+                    onClose()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "photo.on.rectangle.angled")
+                        Text("Set as Hero")
+                    }
+                    .font(.appCalloutMedium)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                }
+            }
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: .appRadiusXLarge))
+            .padding(.horizontal, .appSpacingLarge)
+            .padding(.bottom, 34)
+        }
+    }
+    
+    private func preloadFullImage() {
+        guard fullImage == nil, !isLoadingFullImage else { return }
+        isLoadingFullImage = true
+        
+        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [asset.localIdentifier], options: nil)
+        guard let phAsset = fetchResult.firstObject else {
+            isLoadingFullImage = false
+            return
+        }
+        
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .highQualityFormat
+        options.isNetworkAccessAllowed = true
+        options.isSynchronous = false
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            PHImageManager.default().requestImage(for: phAsset, targetSize: PHImageManagerMaximumSize, contentMode: .aspectFit, options: options) { image, _ in
+                DispatchQueue.main.async {
+                    self.fullImage = image
+                    self.isLoadingFullImage = false
+                }
             }
         }
     }
     
     private func shareAsset(_ asset: PetAsset) {
-        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [asset.localIdentifier], options: nil)
-        guard let phAsset = fetchResult.firstObject else { return }
-        
-        PHImageManager.default().requestImage(for: phAsset, targetSize: PHImageManagerMaximumSize, contentMode: .aspectFit, options: nil) { image, _ in
-            if let image = image {
-                let av = UIActivityViewController(activityItems: [image], applicationActivities: nil)
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let rootVC = windowScene.windows.first?.rootViewController {
-                    rootVC.present(av, animated: true)
+        // 优先使用预加载的图片，如果没有则使用当前显示的图片
+        if let image = fullImage {
+            presentShareController(with: image)
+        } else {
+            // 后备方案：如果还没加载完，显示加载提示
+            let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [asset.localIdentifier], options: nil)
+            guard let phAsset = fetchResult.firstObject else { return }
+            
+            let options = PHImageRequestOptions()
+            options.deliveryMode = .highQualityFormat
+            options.isNetworkAccessAllowed = true
+            
+            DispatchQueue.global(qos: .userInitiated).async {
+                PHImageManager.default().requestImage(for: phAsset, targetSize: PHImageManagerMaximumSize, contentMode: .aspectFit, options: options) { image, _ in
+                    DispatchQueue.main.async {
+                        if let image = image {
+                            self.fullImage = image
+                            self.presentShareController(with: image)
+                        }
+                    }
                 }
             }
+        }
+    }
+    
+    private func presentShareController(with image: UIImage) {
+        let av = UIActivityViewController(activityItems: [image], applicationActivities: nil)
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootVC = windowScene.windows.first?.rootViewController {
+            rootVC.present(av, animated: true)
         }
     }
 }
@@ -503,7 +648,9 @@ struct FullScreenImageView: View {
 struct PHAssetImage: View {
     let localIdentifier: String
     let targetSize: CGSize
+    var contentMode: PHImageContentMode = .aspectFill
     @State private var image: UIImage?
+    @State private var isLoading = false
     
     var body: some View {
         Group {
@@ -513,9 +660,11 @@ struct PHAssetImage: View {
             } else {
                 ZStack {
                     Color.appSecondaryBackground
-                    ProgressView()
-                        .scaleEffect(0.8)
-                        .tint(.appOrange)
+                    if isLoading {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                            .tint(.appOrange)
+                    }
                 }
                 .onAppear {
                     loadImage()
@@ -525,14 +674,24 @@ struct PHAssetImage: View {
     }
     
     private func loadImage() {
+        guard !isLoading else { return }
+        isLoading = true
+        
         let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil)
-        if let asset = fetchResult.firstObject {
-            let options = PHImageRequestOptions()
-            options.deliveryMode = .opportunistic
-            options.isNetworkAccessAllowed = true
-            
-            PHImageManager.default().requestImage(for: asset, targetSize: targetSize, contentMode: .aspectFill, options: options) { result, _ in
+        guard let asset = fetchResult.firstObject else {
+            isLoading = false
+            return
+        }
+        
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .highQualityFormat
+        options.isNetworkAccessAllowed = true
+        options.resizeMode = .exact
+        
+        PHImageManager.default().requestImage(for: asset, targetSize: targetSize, contentMode: contentMode, options: options) { result, _ in
+            DispatchQueue.main.async {
                 self.image = result
+                self.isLoading = false
             }
         }
     }

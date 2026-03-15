@@ -37,22 +37,14 @@ struct PaywallView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        ZStack {
-            // Dark blur background
-            Color.black.opacity(0.5)
-                .ignoresSafeArea()
-            
-            // Bottom sheet
-            VStack(spacing: 0) {
-                Spacer()
-                
-                PaywallContent(purchaseManager: purchaseManager, dismiss: dismiss)
-            }
-        }
+        PaywallSheetContent(purchaseManager: purchaseManager, dismiss: dismiss)
+            .background(Color.white)
+            .ignoresSafeArea(edges: .bottom)
     }
 }
 
-struct PaywallContent: View {
+// MARK: - Paywall Sheet Content (底部弹窗样式)
+struct PaywallSheetContent: View {
     @ObservedObject var purchaseManager: PurchaseManager
     var dismiss: DismissAction
     
@@ -73,10 +65,12 @@ struct PaywallContent: View {
                 }
             }
             .padding(.horizontal, .appSpacingLarge)
-            .padding(.top, .appSpacingMedium)
+            .padding(.top, 24)
             
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 24) {
+                    Spacer().frame(height: 2) // 额外顶部间距
+                    
                     // Header Card with Aurora
                     AuroraHeaderCard()
                     
@@ -92,6 +86,7 @@ struct PaywallContent: View {
                     Spacer().frame(height: 8)
                 }
             }
+            .scrollBounceBehavior(.basedOnSize, axes: .vertical)
             
             // Bottom CTA
             VStack(spacing: 12) {

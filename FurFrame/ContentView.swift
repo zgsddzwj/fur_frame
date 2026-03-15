@@ -63,25 +63,29 @@ struct OnboardingFlowView: View {
                     }
                 )
                 .transition(.opacity)
-                .onChange(of: scanner.hasScanned) { _, hasScanned in
-                    if hasScanned && currentStep == .scanning {
-                        if scanner.foundCount == 0 {
-                            withAnimation {
-                                currentStep = .empty
-                            }
-                        } else {
-                            onComplete()
-                        }
-                    }
-                }
                 
             case .scanning:
                 ScanningView(scanner: scanner)
                     .transition(.opacity)
+                    .onChange(of: scanner.hasScanned) { _, hasScanned in
+                        if hasScanned {
+                            if scanner.foundCount == 0 {
+                                withAnimation {
+                                    currentStep = .empty
+                                }
+                            } else {
+                                onComplete()
+                            }
+                        }
+                    }
                 
             case .empty:
                 EmptyStateView {
                     Task {
+                        withAnimation {
+                            currentStep = .scanning
+                        }
+                        try? await Task.sleep(nanoseconds: 350_000_000)
                         await scanner.startScan()
                     }
                 }
@@ -260,35 +264,8 @@ struct ScanningView: View {
 
 // MARK: - Main Tab View
 struct MainTabView: View {
-    init() {
-        let appearance = UITabBarAppearance()
-        appearance.configureWithDefaultBackground()
-        appearance.backgroundColor = UIColor.systemBackground
-        appearance.shadowImage = nil
-        appearance.shadowColor = nil
-        
-        appearance.stackedLayoutAppearance.normal.iconColor = UIColor.systemGray
-        appearance.stackedLayoutAppearance.normal.titleTextAttributes = [.foregroundColor: UIColor.systemGray]
-        appearance.stackedLayoutAppearance.selected.iconColor = UIColor(hex: "FF6B35")
-        appearance.stackedLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: UIColor(hex: "FF6B35")]
-        
-        UITabBar.appearance().standardAppearance = appearance
-        UITabBar.appearance().scrollEdgeAppearance = appearance
-    }
-    
     var body: some View {
-        TabView {
-            MemoriesView()
-                .tabItem {
-                    Label("Memories", systemImage: "photo.stack.fill")
-                }
-            
-            WidgetStudioView()
-                .tabItem {
-                    Label("Studio", systemImage: "square.grid.2x2.fill")
-                }
-        }
-        .tint(.appOrange)
+        MemoriesView()
     }
 }
 

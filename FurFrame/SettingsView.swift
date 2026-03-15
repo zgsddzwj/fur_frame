@@ -14,6 +14,8 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var assets: [PetAsset]
     @State private var showPaywall = false
+    @State private var isScanning = false
+    @State private var scanProgress = 0.0
     @AppStorage("isPro", store: UserDefaults(suiteName: "group.com.furframe.app")) var isPro: Bool = false
     
     var body: some View {
@@ -32,8 +34,21 @@ struct SettingsView: View {
                         
                         // LIBRARY Section
                         SettingsSection(title: "LIBRARY") {
-                            SettingsRow(title: "Rescan Photo Library", icon: nil) {
-                                // Rescan action
+                            if isScanning {
+                                HStack {
+                                    ProgressView(value: scanProgress)
+                                        .progressViewStyle(LinearProgressViewStyle(tint: .appOrange))
+                                    Text("\(Int(scanProgress * 100))%")
+                                        .font(.appCaption)
+                                        .foregroundColor(.appTextSecondary)
+                                        .frame(width: 40)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                            } else {
+                                SettingsRow(title: "Rescan Photo Library", icon: nil) {
+                                    self.startRescan()
+                                }
                             }
                             
                             Divider().padding(.leading, 16)
@@ -103,6 +118,37 @@ struct SettingsView: View {
         .sheet(isPresented: $showPaywall) {
             PaywallView()
                 .presentationDetents([.fraction(0.75)])
+                .presentationDragIndicator(.visible)
+        }
+    }
+    
+    private func startRescan() {
+        guard !isScanning else { return }
+        
+        isScanning = true
+        scanProgress = 0.0
+        
+        Task { [self] in
+            let scanner = PetScanner(modelContext: modelContext)
+            
+            // 监听进度
+            let progressTask = Task { [self] in
+                while isScanning {
+                    await MainActor.run {
+                        self.scanProgress = scanner.progress
+                    }
+                    try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                }
+            }
+            
+            await scanner.startScan(incremental: false)
+            
+            // 扫描完成
+            progressTask.cancel()
+            await MainActor.run {
+                self.isScanning = false
+                self.scanProgress = 1.0
+            }
         }
     }
 }

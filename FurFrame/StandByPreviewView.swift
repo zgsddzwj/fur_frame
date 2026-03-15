@@ -68,19 +68,7 @@ struct StandByPreviewView: View {
                         Spacer()
                         
                         // Clock
-                        HStack(spacing: 4) {
-                            let timeString = currentTime.formatted(date: .omitted, time: .shortened)
-                            let components = timeString.split(separator: ":")
-                            if components.count >= 2 {
-                                Text(String(components[0]))
-                                    .font(.system(size: 64, weight: .bold, design: .rounded))
-                                    .foregroundColor(.appNeon)
-                                
-                                Text(String(components[1]))
-                                    .font(.system(size: 64, weight: .bold, design: .rounded))
-                                    .foregroundColor(.appNeon)
-                            }
-                        }
+                        ClockView(currentTime: currentTime)
                     }
                     .padding(.horizontal, 24)
                     .frame(width: 340, height: 160)
@@ -125,6 +113,33 @@ struct StandByPreviewView: View {
         .sheet(isPresented: $showPaywall) {
             PaywallView()
                 .presentationDetents([.fraction(0.75)])
+                .presentationDragIndicator(.visible)
+        }
+    }
+}
+
+// MARK: - Clock View
+struct ClockView: View {
+    let currentTime: Date
+    
+    private var timeString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: currentTime)
+    }
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            let components = timeString.split(separator: ":")
+            if components.count >= 2 {
+                Text(String(components[0]))
+                    .font(.system(size: 56, weight: .bold, design: .rounded))
+                    .foregroundColor(.appNeon)
+                
+                Text(String(components[1]))
+                    .font(.system(size: 56, weight: .bold, design: .rounded))
+                    .foregroundColor(.appNeon)
+            }
         }
     }
 }

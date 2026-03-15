@@ -40,6 +40,7 @@ struct WidgetStudioView: View {
     @AppStorage("widgetAlbumSource", store: UserDefaults(suiteName: "group.com.furframe.app")) var albumSource: String = "All Pets"
     @AppStorage("isPro", store: UserDefaults(suiteName: "group.com.furframe.app")) var isPro: Bool = false
     
+    @Environment(\.dismiss) private var dismiss
     @State private var showPaywall = false
     @State private var showStandByPreview = false
     @State private var animatePreview = false
@@ -51,30 +52,6 @@ struct WidgetStudioView: View {
                 Color.appSecondaryBackground.ignoresSafeArea()
                 
                 VStack(spacing: 0) {
-                    // Navigation
-                    HStack {
-                        Text("Done")
-                            .font(.appCalloutMedium)
-                            .foregroundColor(.appOrange)
-                        
-                        Spacer()
-                        
-                        Text("Widget Studio")
-                            .font(.appHeadline3)
-                        
-                        Spacer()
-                        
-                        Button {
-                            showStandByPreview = true
-                        } label: {
-                            Text("StandBy")
-                                .font(.appCalloutMedium)
-                                .foregroundColor(.appOrange)
-                        }
-                    }
-                    .padding(.horizontal, .appSpacingLarge)
-                    .padding(.top, .appSpacingMedium)
-                    
                     // Size Picker
                     SizePicker(selectedSize: $selectedSize)
                         .padding(.horizontal, .appSpacingLarge)
@@ -89,7 +66,7 @@ struct WidgetStudioView: View {
                             triggerPreviewAnimation()
                         }
                     
-                    // Bottom Sheet
+                    // Bottom Sheet - 贴底显示
                     BottomSheet(
                         selectedTheme: $selectedTheme,
                         albumSource: $albumSource,
@@ -106,6 +83,28 @@ struct WidgetStudioView: View {
                             }
                         }
                     )
+                    .ignoresSafeArea(edges: .bottom)
+                }
+            }
+            .navigationTitle("Widget Studio")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .font(.appCalloutMedium)
+                    .foregroundColor(.appOrange)
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showStandByPreview = true
+                    } label: {
+                        Text("StandBy")
+                            .font(.appCalloutMedium)
+                            .foregroundColor(.appOrange)
+                    }
                 }
             }
             .sheet(isPresented: $showPaywall) {
@@ -113,9 +112,8 @@ struct WidgetStudioView: View {
                     .presentationDetents([.fraction(0.75)])
                     .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showStandByPreview) {
+            .fullScreenCover(isPresented: $showStandByPreview) {
                 StandByPreviewView()
-                    .presentationDetents([.large])
             }
         }
     }
@@ -163,16 +161,18 @@ struct PreviewArea: View {
     let animate: Bool
     
     var body: some View {
-        ZStack {
-            Color.appSecondaryBackground
-            
-            // Widget Preview
-            WidgetPreviewCard(size: size, theme: theme)
-                .shadow(color: .black.opacity(0.1), radius: 30, x: 0, y: 15)
-                .scaleEffect(animate ? 1.0 : 0.95)
-                .opacity(animate ? 1.0 : 0.7)
-                .animation(.spring(response: 0.4, dampingFraction: 0.7), value: animate)
-                .rotationEffect(.degrees(theme == .polaroid ? -2 : 0))
+        GeometryReader { geo in
+            ZStack {
+                Color.appSecondaryBackground
+                
+                // Widget Preview
+                WidgetPreviewCard(size: size, theme: theme, maxHeight: geo.size.height)
+                    .shadow(color: .black.opacity(0.1), radius: 30, x: 0, y: 15)
+                    .scaleEffect(animate ? 1.0 : 0.95)
+                    .opacity(animate ? 1.0 : 0.7)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.7), value: animate)
+                    .rotationEffect(.degrees(theme == .polaroid ? -2 : 0))
+            }
         }
         .frame(maxHeight: .infinity)
     }
@@ -182,6 +182,7 @@ struct PreviewArea: View {
 struct WidgetPreviewCard: View {
     let size: WidgetSize
     let theme: WidgetTheme
+    var maxHeight: CGFloat = .infinity
     
     var body: some View {
         let frameSize = getFrameSize()
@@ -196,14 +197,24 @@ struct WidgetPreviewCard: View {
                 FilmWidgetPreview()
             }
         }
-        .frame(width: frameSize.width, height: frameSize.height)
+        .frame(width: frameSize.width, height: min(frameSize.height, maxHeight * 0.95))
+        .id(size) // 强制在size变化时重新创建视图
     }
     
     private func getFrameSize() -> CGSize {
+        let screenWidth = UIScreen.main.bounds.width - 40 // 减去边距
+        let availableWidth = min(340, screenWidth)
+        
         switch size {
-        case .small: return CGSize(width: 160, height: 160)
-        case .medium: return CGSize(width: 340, height: 160)
-        case .large: return CGSize(width: 340, height: 340)
+        case .small: 
+            // Small: 正方形，较小
+            return CGSize(width: 140, height: 140)
+        case .medium: 
+            // Medium: 2x1 矩形，宽度占满，高度为宽度的一半
+            return CGSize(width: availableWidth, height: availableWidth * 0.45)
+        case .large: 
+            // Large: 2x2 正方形，明显比Medium高
+            return CGSize(width: availableWidth, height: availableWidth * 0.9)
         }
     }
 }
@@ -214,9 +225,9 @@ struct MinimalWidgetPreview: View {
         ZStack {
             Image(systemName: "dog.fill")
                 .resizable()
-                .aspectRatio(contentMode: .fill)
+                .aspectRatio(contentMode: .fit)
                 .foregroundColor(.appOrange.opacity(0.8))
-                .padding(40)
+                .padding(20)
                 .background(Color.appOrange.opacity(0.2))
             
             // Small watermark
@@ -231,6 +242,7 @@ struct MinimalWidgetPreview: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.appOrange.opacity(0.3))
         .clipShape(RoundedRectangle(cornerRadius: .appRadiusLarge))
     }
@@ -238,76 +250,85 @@ struct MinimalWidgetPreview: View {
 
 struct PolaroidWidgetPreview: View {
     var body: some View {
-        VStack(spacing: 0) {
-            ZStack {
-                Image(systemName: "dog.fill")
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .foregroundColor(.appOrange)
-                    .padding(20)
-                    .background(Color.appOrange.opacity(0.15))
+        GeometryReader { geo in
+            VStack(spacing: 0) {
+                // 图片区域 - 根据高度自适应
+                ZStack {
+                    Image(systemName: "dog.fill")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .foregroundColor(.appOrange)
+                        .padding(geo.size.height > 200 ? 30 : 15)
+                        .background(Color.appOrange.opacity(0.15))
+                }
+                .frame(height: geo.size.height * 0.75) // 图片占75%高度
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+                
+                Spacer()
+                
+                Text("memories")
+                    .font(.system(size: min(14, geo.size.height * 0.08), design: .serif))
+                    .foregroundColor(.appTextSecondary)
+                    .padding(.bottom, geo.size.height > 200 ? 20 : 12)
             }
-            .padding(12)
-            .padding(.top, 12)
-            
-            Spacer()
-            
-            Text("memories")
-                .font(.system(size: 14, design: .serif))
-                .foregroundColor(.appTextSecondary)
-                .padding(.bottom, 16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: .appRadiusMedium))
+            .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 4)
         }
-        .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: .appRadiusMedium))
-        .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 4)
     }
 }
 
 struct FilmWidgetPreview: View {
     var body: some View {
-        ZStack {
-            Color.black
-            
+        GeometryReader { geo in
             ZStack {
-                Image(systemName: "cat.fill")
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .foregroundColor(.white.opacity(0.9))
-                    .padding(30)
-                    .background(Color.gray.opacity(0.3))
+                Color.black
                 
-                // Vignette
-                RadialGradient(
-                    colors: [.clear, .black.opacity(0.5)],
-                    center: .center,
-                    startRadius: 50,
-                    endRadius: 120
-                )
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
-            
-            // Film holes
-            HStack {
-                VStack(spacing: 8) {
-                    ForEach(0..<5) { _ in
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.appGold.opacity(0.8))
-                            .frame(width: 5, height: 8)
+                // 主图片区域
+                ZStack {
+                    Image(systemName: "cat.fill")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .foregroundColor(.white.opacity(0.9))
+                        .padding(geo.size.height > 200 ? 40 : 20)
+                        .background(Color.gray.opacity(0.3))
+                    
+                    // Vignette
+                    RadialGradient(
+                        colors: [.clear, .black.opacity(0.5)],
+                        center: .center,
+                        startRadius: geo.size.height * 0.2,
+                        endRadius: geo.size.height * 0.5
+                    )
+                }
+                .padding(.horizontal, geo.size.height > 200 ? 30 : 16)
+                .padding(.vertical, geo.size.height > 200 ? 20 : 12)
+                
+                // Film holes - 根据高度调整数量
+                HStack {
+                    VStack(spacing: geo.size.height > 200 ? 12 : 6) {
+                        ForEach(0..<(geo.size.height > 200 ? 6 : 4)) { _ in
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(Color.appGold.opacity(0.8))
+                                .frame(width: 5, height: 8)
+                        }
+                    }
+                    Spacer()
+                    VStack(spacing: geo.size.height > 200 ? 12 : 6) {
+                        ForEach(0..<(geo.size.height > 200 ? 6 : 4)) { _ in
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(Color.appGold.opacity(0.8))
+                                .frame(width: 5, height: 8)
+                        }
                     }
                 }
-                Spacer()
-                VStack(spacing: 8) {
-                    ForEach(0..<5) { _ in
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.appGold.opacity(0.8))
-                            .frame(width: 5, height: 8)
-                    }
-                }
+                .padding(.horizontal, 6)
             }
-            .padding(.horizontal, 6)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: .appRadiusMedium))
         }
-        .clipShape(RoundedRectangle(cornerRadius: .appRadiusMedium))
     }
 }
 
