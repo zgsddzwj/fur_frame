@@ -11,23 +11,21 @@ import SwiftData
 import Photos
 
 enum WidgetTheme: String, CaseIterable, Identifiable {
-    case minimal, polaroid, film, polaroidDate, standbyClock
+    case minimal, polaroid, film
     var id: String { self.rawValue }
     
     var label: String {
         switch self {
         case .minimal: return "Minimal"
         case .polaroid: return "Polaroid"
-        case .film: return "Film"
-        case .polaroidDate: return "Polaroid + Date"
-        case .standbyClock: return "StandBy Clock"
+        case .film: return "Film Pro"
         }
     }
     
     var isPro: Bool {
         switch self {
         case .minimal, .polaroid: return false
-        default: return true
+        case .film: return true
         }
     }
 }
@@ -68,7 +66,6 @@ struct Provider: TimelineProvider {
             var entries: [PetEntry] = []
             let currentDate = Date()
             
-            // Create 24 hourly entries for the next day
             for i in 0..<24 {
                 let entryDate = Calendar.current.date(byAdding: .hour, value: i, to: currentDate)!
                 let entry = await fetchNextEntry(for: entryDate)
@@ -96,12 +93,10 @@ struct Provider: TimelineProvider {
             return PetEntry(date: date, image: nil, asset: nil, theme: theme, albumSource: albumSource)
         }
         
-        // Rotate through assets based on hour
         let calendar = Calendar.current
         let hour = calendar.component(.hour, from: date)
         let assetIndex = hour % assets.count
         let selectedAsset = assets[assetIndex]
-        
         let image = await loadThumbnail(for: selectedAsset.localIdentifier)
         
         return PetEntry(date: date, image: image, asset: selectedAsset, theme: theme, albumSource: albumSource)
@@ -111,7 +106,6 @@ struct Provider: TimelineProvider {
         let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [localId], options: nil)
         guard let asset = fetchResult.firstObject else { return nil }
         
-        // Memory limit optimization - 30MB limit
         let targetSize = CGSize(width: 500, height: 500)
         let options = PHImageRequestOptions()
         options.deliveryMode = .fastFormat
@@ -137,30 +131,25 @@ struct FurFrameWidgetsEntryView : View {
 
     var body: some View {
         ZStack {
-            // Base image
             if let image = entry.image {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                // Empty state
                 ZStack {
                     Color(hex: "F5F5F3")
-                    
-                    VStack(spacing: 12) {
+                    VStack(spacing: 8) {
                         Image(systemName: "pawprint.circle")
-                            .font(.system(size: 40))
-                            .foregroundColor(.orange.opacity(0.5))
-                        
+                            .font(.system(size: 32))
+                            .foregroundColor(Color(hex: "FF6B35").opacity(0.5))
                         Text("FurFrame")
-                            .font(.caption)
-                            .foregroundColor(.gray)
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(hex: "8E8E93"))
                     }
                 }
             }
             
-            // Theme overlay
             ThemeOverlay(entry: entry, family: family)
         }
         .containerBackground(.fill.tertiary, for: .widget)
@@ -176,13 +165,9 @@ struct ThemeOverlay: View {
         case .minimal:
             MinimalOverlay()
         case .polaroid:
-            PolaroidOverlay(family: family, showDate: false, date: nil)
-        case .polaroidDate:
-            PolaroidOverlay(family: family, showDate: true, date: entry.asset?.creationDate)
+            PolaroidOverlay(family: family)
         case .film:
-            FilmOverlay()
-        case .standbyClock:
-            StandbyClockOverlay(entry: entry, family: family)
+            FilmOverlay(family: family)
         }
     }
 }
@@ -191,14 +176,13 @@ struct ThemeOverlay: View {
 struct MinimalOverlay: View {
     var body: some View {
         ZStack {
-            // Small watermark in corner
             VStack {
                 Spacer()
                 HStack {
                     Spacer()
                     Image(systemName: "pawprint.fill")
                         .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(.white.opacity(0.8))
                         .padding(8)
                 }
             }
@@ -209,84 +193,72 @@ struct MinimalOverlay: View {
 // MARK: - Polaroid Theme
 struct PolaroidOverlay: View {
     let family: WidgetFamily
-    let showDate: Bool
-    let date: Date?
     
-    var bottomPadding: CGFloat {
-        family == .systemSmall ? 25 : 35
+    var bottomHeight: CGFloat {
+        family == .systemSmall ? 24 : 32
     }
     
     var body: some View {
         ZStack {
-            // White border effect
             VStack(spacing: 0) {
                 Color.clear
-                    .padding(8)
-                    .padding(.top, 8)
-                
-                ZStack {
-                    Color.white.frame(height: bottomPadding)
-                    
-                    if showDate, let date = date {
-                        Text(date.formatted(date: .abbreviated, time: .omitted))
-                            .font(.custom("Bradley Hand", size: family == .systemSmall ? 10 : 12, relativeTo: .caption))
-                            .foregroundColor(.black.opacity(0.7))
-                            .rotationEffect(.degrees(-3))
-                    }
-                }
+                Color.white.frame(height: bottomHeight)
             }
-            .padding(4)
+            .padding(8)
+            
+            VStack {
+                Spacer()
+                Text("memories")
+                    .font(.system(size: family == .systemSmall ? 8 : 10, design: .serif))
+                    .foregroundColor(Color(hex: "8E8E93"))
+                    .padding(.bottom, family == .systemSmall ? 6 : 8)
+            }
         }
     }
 }
 
 // MARK: - Film Theme
 struct FilmOverlay: View {
+    let family: WidgetFamily
+    
     var body: some View {
         ZStack {
-            // Black frame
             Color.black
             
-            // Photo area with vignette
+            // Photo area
             GeometryReader { geo in
                 ZStack {
-                    // Vignette effect
+                    Color.clear
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 12)
+                    
+                    // Vignette
                     RadialGradient(
                         colors: [.clear, .black.opacity(0.4)],
                         center: .center,
                         startRadius: geo.size.width * 0.3,
-                        endRadius: geo.size.width * 0.7
+                        endRadius: geo.size.width * 0.6
                     )
-                    
-                    // Noise overlay (simulated with pattern)
-                    Image(systemName: "circle.grid.2x2.fill")
-                        .resizable()
-                        .opacity(0.03)
-                        .blendMode(.overlay)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
                 }
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 10)
             
-            // Film sprocket holes
+            // Film holes
             HStack {
-                // Left holes
-                VStack(spacing: 10) {
-                    ForEach(0..<6) { _ in
+                VStack(spacing: family == .systemSmall ? 6 : 8) {
+                    ForEach(0..<(family == .systemSmall ? 4 : 6)) { _ in
                         RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.yellow.opacity(0.8))
-                            .frame(width: 5, height: 8)
+                            .fill(Color(hex: "FFD60A").opacity(0.8))
+                            .frame(width: 4, height: family == .systemSmall ? 6 : 8)
                     }
                 }
-                
                 Spacer()
-                
-                // Right holes
-                VStack(spacing: 10) {
-                    ForEach(0..<6) { _ in
+                VStack(spacing: family == .systemSmall ? 6 : 8) {
+                    ForEach(0..<(family == .systemSmall ? 4 : 6)) { _ in
                         RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.yellow.opacity(0.8))
-                            .frame(width: 5, height: 8)
+                            .fill(Color(hex: "FFD60A").opacity(0.8))
+                            .frame(width: 4, height: family == .systemSmall ? 6 : 8)
                     }
                 }
             }
@@ -295,71 +267,6 @@ struct FilmOverlay: View {
     }
 }
 
-// MARK: - StandBy Clock Theme
-struct StandbyClockOverlay: View {
-    let entry: PetEntry
-    let family: WidgetFamily
-    
-    var body: some View {
-        ZStack {
-            Color.black
-            
-            HStack(spacing: family == .systemSmall ? 12 : 20) {
-                // Pet avatar placeholder
-                ZStack {
-                    Circle()
-                        .fill(Color.orange.opacity(0.3))
-                        .frame(width: avatarSize, height: avatarSize)
-                    
-                    if entry.image == nil {
-                        Image(systemName: "pawprint.fill")
-                            .font(.system(size: avatarSize * 0.4))
-                            .foregroundColor(.orange)
-                    }
-                }
-                
-                if family != .systemSmall {
-                    Spacer()
-                }
-                
-                // Clock
-                VStack(alignment: .trailing, spacing: -5) {
-                    let components = entry.date.formatted(date: .omitted, time: .shortened).split(separator: ":")
-                    if components.count >= 2 {
-                        Text(String(components[0]))
-                            .font(.system(size: family == .systemSmall ? 40 : 60, weight: .black, design: .rounded))
-                            .foregroundColor(neonColor)
-                            .shadow(color: neonColor.opacity(0.6), radius: 10)
-                        
-                        HStack(spacing: 2) {
-                            Text(":")
-                            Text(String(components[1]))
-                        }
-                        .font(.system(size: family == .systemSmall ? 40 : 60, weight: .black, design: .rounded))
-                        .foregroundColor(neonColor)
-                        .shadow(color: neonColor.opacity(0.6), radius: 10)
-                    }
-                }
-            }
-            .padding()
-        }
-    }
-    
-    private var avatarSize: CGFloat {
-        switch family {
-        case .systemSmall: return 60
-        case .systemMedium: return 80
-        case .systemLarge: return 100
-        default: return 70
-        }
-    }
-    
-    private var neonColor: Color {
-        Color(hex: "39FF14") // Neon green
-    }
-}
-
-// MARK: - Widget Configuration
 struct FurFrameWidgets: Widget {
     let kind: String = "FurFrameWidgets"
 
@@ -398,27 +305,4 @@ extension Color {
             opacity: Double(a) / 255
         )
     }
-}
-
-// MARK: - Preview
-@available(iOS 17.0, *)
-#Preview(as: .systemSmall, widget: { FurFrameWidgets() }) {
-    PetEntry(
-        date: Date(),
-        image: nil,
-        asset: nil,
-        theme: .minimal,
-        albumSource: "All Pets"
-    )
-}
-
-@available(iOS 17.0, *)
-#Preview(as: .systemMedium, widget: { FurFrameWidgets() }) {
-    PetEntry(
-        date: Date(),
-        image: nil,
-        asset: nil,
-        theme: .standbyClock,
-        albumSource: "All Pets"
-    )
 }

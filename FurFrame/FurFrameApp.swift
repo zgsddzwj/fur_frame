@@ -14,16 +14,28 @@ struct FurFrameApp: App {
         let schema = Schema([
             PetAsset.self,
         ])
-        let modelConfiguration = ModelConfiguration(
+        
+        // Try to create ModelContainer with App Group first
+        let appGroupConfig = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false,
             groupContainer: .identifier("group.com.furframe.app")
         )
-
+        
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            return try ModelContainer(for: schema, configurations: [appGroupConfig])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            // Fallback to default container if App Group fails
+            print("App Group container failed, using default: \(error)")
+            let defaultConfig = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: false
+            )
+            do {
+                return try ModelContainer(for: schema, configurations: [defaultConfig])
+            } catch {
+                fatalError("Could not create ModelContainer: \(error)")
+            }
         }
     }()
 

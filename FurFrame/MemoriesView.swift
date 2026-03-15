@@ -19,7 +19,6 @@ struct MemoriesView: View {
     @State private var showSettings = false
     @State private var scrollOffset: CGFloat = 0
     
-    // Grid layout
     private let columns = [
         GridItem(.flexible(), spacing: 8),
         GridItem(.flexible(), spacing: 8)
@@ -28,8 +27,7 @@ struct MemoriesView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Background
-                Color(hex: "F9F9F7").ignoresSafeArea()
+                Color.white.ignoresSafeArea()
                 
                 ScrollView {
                     GeometryReader { proxy in
@@ -38,12 +36,12 @@ struct MemoriesView: View {
                     }
                     .frame(height: 0)
                     
-                    VStack(spacing: 16) {
+                    VStack(spacing: 0) {
                         // Limited access banner
                         if isPhotoLibraryLimited {
                             LimitedAccessBanner()
-                                .padding(.horizontal)
-                                .padding(.top, 8)
+                                .padding(.horizontal, .appSpacingLarge)
+                                .padding(.top, .appSpacingMedium)
                         }
                         
                         // Hero Section
@@ -53,24 +51,19 @@ struct MemoriesView: View {
                                     selectedAsset = hero
                                 }
                             })
-                            .padding(.horizontal)
-                        } else {
-                            // Empty hero placeholder
-                            EmptyHeroView()
-                                .padding(.horizontal)
+                            .padding(.horizontal, .appSpacingLarge)
+                            .padding(.top, .appSpacingMedium)
                         }
                         
-                        // Section title
+                        // Section Title
                         HStack {
-                            Text("All Memories")
-                                .font(.title2.weight(.bold))
+                            Text("All Pets")
+                                .font(.appHeadline3)
                             Spacer()
-                            Text("\(assets.count) photos")
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
                         }
-                        .padding(.horizontal)
-                        .padding(.top, 8)
+                        .padding(.horizontal, .appSpacingLarge)
+                        .padding(.top, .appSpacingXLarge)
+                        .padding(.bottom, .appSpacingMedium)
                         
                         // Masonry Grid
                         if assets.isEmpty {
@@ -85,7 +78,7 @@ struct MemoriesView: View {
                             }
                         }
                     }
-                    .padding(.bottom, 20)
+                    .padding(.bottom, .appSpacingLarge)
                 }
                 .coordinateSpace(name: "scroll")
                 .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
@@ -96,17 +89,27 @@ struct MemoriesView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Image(systemName: "gearshape.fill")
-                            .foregroundColor(.orange)
-                            .font(.system(size: 18, weight: .semibold))
+                    HStack(spacing: 16) {
+                        Button {
+                            // Widget grid view
+                        } label: {
+                            Image(systemName: "square.grid.2x2")
+                                .font(.system(size: 20))
+                                .foregroundColor(.appTextPrimary)
+                        }
+                        
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Image(systemName: "gear")
+                                .font(.system(size: 20))
+                                .foregroundColor(.appTextPrimary)
+                        }
                     }
                 }
             }
             .toolbarBackground(scrollOffset < -100 ? .visible : .hidden, for: .navigationBar)
-            .toolbarBackground(Color(hex: "F9F9F7").opacity(0.95), for: .navigationBar)
+            .toolbarBackground(.white, for: .navigationBar)
             .sheet(isPresented: $showSettings) {
                 SettingsView()
             }
@@ -115,7 +118,6 @@ struct MemoriesView: View {
                     FullScreenImageView(
                         asset: selected,
                         namespace: animation,
-                        allAssets: assets,
                         onSetAsHero: {
                             withAnimation(.spring()) {
                                 heroAsset = selected
@@ -136,9 +138,6 @@ struct MemoriesView: View {
             if heroAsset == nil && !assets.isEmpty {
                 heroAsset = assets.randomElement()
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .init("RescanPhotos"))) { _ in
-            // Handle rescan notification
         }
     }
     
@@ -171,30 +170,21 @@ struct LimitedAccessBanner: View {
                 UIApplication.shared.open(settingsUrl)
             }
         } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "exclamationmark.circle.fill")
-                    .font(.title3)
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 16))
                 
-                Text("Want to find more fur babies? Tap here to allow full library access.")
-                    .font(.subheadline)
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(2)
+                Text("Tap to allow full photo access")
+                    .font(.appCalloutMedium)
+                    .lineLimit(1)
                 
                 Spacer()
-                
-                Image(systemName: "chevron.right")
-                    .font(.caption)
             }
-            .foregroundColor(.orange)
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.orange.opacity(0.1))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.orange.opacity(0.2), lineWidth: 1)
-            )
+            .foregroundColor(.appTextPrimary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color.appWarning)
+            .cornerRadius(.appRadiusXLarge)
         }
     }
 }
@@ -215,56 +205,49 @@ struct HeroSection: View {
                 )
                 .aspectRatio(contentMode: .fill)
                 .frame(width: geo.size.width, height: geo.size.height)
-                .clipShape(RoundedRectangle(cornerRadius: 24))
+                .clipShape(RoundedRectangle(cornerRadius: .appRadiusXXLarge))
                 .matchedGeometryEffect(id: asset.localIdentifier, in: namespace)
                 .onTapGesture(perform: onTap)
                 
                 // Gradient overlay
                 LinearGradient(
-                    colors: [.black.opacity(0.6), .black.opacity(0.2), .clear],
+                    colors: [.black.opacity(0.6), .clear],
                     startPoint: .bottom,
                     endPoint: .center
                 )
                 .frame(height: geo.size.height * 0.4)
-                .clipShape(RoundedRectangle(cornerRadius: 24))
+                .clipShape(RoundedRectangle(cornerRadius: .appRadiusXXLarge))
                 
-                // Date label
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Today's Memory")
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(.white.opacity(0.8))
+                // Content
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Golden Hour")
+                            .font(.appHeadline2)
+                            .foregroundColor(.white)
+                        
+                        Text(asset.creationDate.formatted(date: .abbreviated, time: .omitted))
+                            .font(.appCallout)
+                            .foregroundColor(.white.opacity(0.8))
+                    }
                     
-                    Text(asset.creationDate.formatted(date: .long, time: .omitted))
-                        .font(.title3.weight(.bold))
-                        .foregroundColor(.white)
+                    Spacer()
+                    
+                    // Favorite button
+                    Button {
+                        withAnimation(.spring()) {
+                            asset.isFavorite.toggle()
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }
+                    } label: {
+                        Image(systemName: asset.isFavorite ? "heart.fill" : "heart")
+                            .font(.system(size: 20))
+                            .foregroundColor(asset.isFavorite ? .appError : .white)
+                            .padding(12)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
+                    }
                 }
                 .padding(20)
-            }
-        }
-        .frame(height: UIScreen.main.bounds.height / 3)
-        .shadow(color: .black.opacity(0.1), radius: 20, x: 0, y: 10)
-    }
-}
-
-// MARK: - Empty Hero View
-struct EmptyHeroView: View {
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 24)
-                .fill(Color.orange.opacity(0.1))
-            
-            VStack(spacing: 16) {
-                Image(systemName: "pawprint.circle")
-                    .font(.system(size: 60))
-                    .foregroundColor(.orange.opacity(0.5))
-                
-                Text("No memories yet")
-                    .font(.headline)
-                    .foregroundColor(.gray)
-                
-                Text("Add some pet photos to get started")
-                    .font(.subheadline)
-                    .foregroundColor(.gray.opacity(0.8))
             }
         }
         .frame(height: UIScreen.main.bounds.height / 3)
@@ -279,15 +262,15 @@ struct EmptyGridView: View {
             
             Image(systemName: "photo.on.rectangle.angled")
                 .font(.system(size: 70))
-                .foregroundColor(.gray.opacity(0.4))
+                .foregroundColor(.appTextTertiary)
             
             Text("No Photos Found")
-                .font(.title3.weight(.semibold))
-                .foregroundColor(.gray)
+                .font(.appHeadline3)
+                .foregroundColor(.appTextSecondary)
             
             Text("Photos of your pets will appear here once scanned.")
-                .font(.subheadline)
-                .foregroundColor(.gray.opacity(0.8))
+                .font(.appCallout)
+                .foregroundColor(.appTextTertiary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
             
@@ -320,7 +303,7 @@ struct MasonryGrid: View {
                 }
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, .appSpacingLarge)
     }
 }
 
@@ -344,12 +327,11 @@ struct PetCard: View {
     
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            // Image
             PHAssetImage(localIdentifier: asset.localIdentifier, targetSize: CGSize(width: 400, height: 400))
                 .aspectRatio(contentMode: .fill)
                 .frame(minWidth: 0, maxWidth: .infinity)
                 .frame(height: height)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .clipShape(RoundedRectangle(cornerRadius: .appRadiusLarge))
                 .matchedGeometryEffect(id: asset.localIdentifier, in: namespace)
                 .onTapGesture {
                     onTap(asset)
@@ -358,22 +340,6 @@ struct PetCard: View {
                     validateAsset(asset)
                 }
             
-            // Pet type badge
-            HStack(spacing: 4) {
-                Image(systemName: asset.petType == "cat" ? "cat" : "dog")
-                    .font(.caption2)
-                Text(asset.petType.capitalized)
-                    .font(.caption2.weight(.medium))
-            }
-            .foregroundColor(.white)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(.ultraThinMaterial)
-            .clipShape(Capsule())
-            .padding(10)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            
-            // Favorite button
             Button {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                     asset.isFavorite.toggle()
@@ -382,11 +348,10 @@ struct PetCard: View {
             } label: {
                 Image(systemName: asset.isFavorite ? "heart.fill" : "heart")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(asset.isFavorite ? .red : .white)
+                    .foregroundColor(asset.isFavorite ? .appError : .white)
                     .padding(10)
                     .background(.ultraThinMaterial)
                     .clipShape(Circle())
-                    .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 2)
             }
             .padding(10)
         }
@@ -397,26 +362,20 @@ struct PetCard: View {
 struct FullScreenImageView: View {
     let asset: PetAsset
     var namespace: Namespace.ID
-    let allAssets: [PetAsset]
     var onSetAsHero: () -> Void
     let onClose: () -> Void
     
     @State private var scale: CGFloat = 1.0
     @State private var lastScale: CGFloat = 1.0
-    @State private var dragOffset: CGSize = .zero
-    @State private var showControls = true
     
     var body: some View {
         ZStack {
-            // Background
             Color.black.ignoresSafeArea()
             
-            // Image with zoom and pan
+            // Image
             PHAssetImage(localIdentifier: asset.localIdentifier, targetSize: PHImageManagerMaximumSize)
                 .aspectRatio(contentMode: .fit)
                 .scaleEffect(scale)
-                .offset(dragOffset)
-                .matchedGeometryEffect(id: asset.localIdentifier, in: namespace)
                 .gesture(
                     MagnificationGesture()
                         .onChanged { value in
@@ -429,108 +388,72 @@ struct FullScreenImageView: View {
                             if scale < 1.0 {
                                 withAnimation(.spring()) {
                                     scale = 1.0
-                                    dragOffset = .zero
                                 }
                             }
                         }
                 )
-                .simultaneousGesture(
-                    DragGesture()
-                        .onChanged { value in
-                            if scale > 1.0 {
-                                dragOffset = CGSize(
-                                    width: dragOffset.width + value.translation.width,
-                                    height: dragOffset.height + value.translation.height
-                                )
-                            }
-                        }
-                        .onEnded { _ in }
-                )
-                .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showControls.toggle()
-                    }
-                }
+                .matchedGeometryEffect(id: asset.localIdentifier, in: namespace)
             
-            // Controls overlay
-            if showControls {
-                VStack {
-                    // Top bar
-                    HStack {
-                        Button(action: onClose) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(12)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
-                        }
-                        
-                        Spacer()
-                        
-                        // Share button
-                        Button {
-                            shareAsset(asset)
-                        } label: {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(12)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
-                        }
+            // Top Bar
+            VStack {
+                HStack {
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(12)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
                     }
-                    .padding()
-                    .padding(.top, 8)
                     
                     Spacer()
                     
-                    // Bottom controls
-                    VStack(spacing: 16) {
-                        // Date display
-                        HStack(spacing: 6) {
-                            Image(systemName: "calendar")
-                            Text(asset.creationDate.formatted(date: .long, time: .shortened))
-                        }
-                        .font(.subheadline)
-                        .foregroundColor(.white.opacity(0.9))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Capsule())
-                        
-                        // Action buttons
-                        HStack(spacing: 40) {
-                            ActionButton(
-                                title: "Share",
-                                icon: "square.and.arrow.up",
-                                color: .white
-                            ) {
-                                shareAsset(asset)
-                            }
-                            
-                            ActionButton(
-                                title: "Set as Hero",
-                                icon: "star.fill",
-                                color: .orange
-                            ) {
-                                onSetAsHero()
-                                onClose()
-                            }
-                        }
-                    }
-                    .padding(.bottom, 40)
-                    .padding(.horizontal)
+                    Text(asset.creationDate.formatted(date: .long, time: .omitted))
+                        .font(.appCalloutMedium)
+                        .foregroundColor(.white)
                 }
-                .background(
-                    LinearGradient(
-                        colors: [.black.opacity(0.4), .clear, .clear, .black.opacity(0.5)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .ignoresSafeArea()
-                )
-                .transition(.opacity)
+                .padding(.horizontal)
+                .padding(.top, 16)
+                
+                Spacer()
+                
+                // Bottom Glass Bar
+                HStack(spacing: 0) {
+                    Button {
+                        shareAsset(asset)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.up.square")
+                            Text("Share")
+                        }
+                        .font(.appCalloutMedium)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                    }
+                    
+                    Divider()
+                        .background(Color.white.opacity(0.3))
+                        .frame(height: 24)
+                    
+                    Button {
+                        onSetAsHero()
+                        onClose()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                            Text("Set as Hero")
+                        }
+                        .font(.appCalloutMedium)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                    }
+                }
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: .appRadiusXLarge))
+                .padding(.horizontal, .appSpacingLarge)
+                .padding(.bottom, 34)
             }
         }
     }
@@ -551,30 +474,6 @@ struct FullScreenImageView: View {
     }
 }
 
-// MARK: - Action Button
-struct ActionButton: View {
-    let title: String
-    let icon: String
-    let color: Color
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 24))
-                Text(title)
-                    .font(.subheadline.weight(.medium))
-            }
-            .foregroundColor(color)
-            .frame(width: 80)
-            .padding(.vertical, 12)
-            .background(.ultraThinMaterial)
-            .cornerRadius(16)
-        }
-    }
-}
-
 // MARK: - PH Asset Image
 struct PHAssetImage: View {
     let localIdentifier: String
@@ -588,9 +487,10 @@ struct PHAssetImage: View {
                     .resizable()
             } else {
                 ZStack {
-                    Color.gray.opacity(0.15)
+                    Color.appSecondaryBackground
                     ProgressView()
                         .scaleEffect(0.8)
+                        .tint(.appOrange)
                 }
                 .onAppear {
                     loadImage()

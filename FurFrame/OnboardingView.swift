@@ -14,10 +14,8 @@ struct OnboardingView: View {
     @StateObject private var scanner: PetScanner
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     
-    // Animation states
     @State private var showContent = false
-    @State private var pawScale: CGFloat = 0.8
-    @State private var pawRotation: Double = 0
+    @State private var illustrationScale: CGFloat = 0.9
     
     init() {
         let schema = Schema([PetAsset.self])
@@ -28,58 +26,56 @@ struct OnboardingView: View {
     
     var body: some View {
         ZStack {
-            // Background
-            Color(hex: "F9F9F7")
-                .ignoresSafeArea()
+            Color.appBackground.ignoresSafeArea()
             
             VStack(spacing: 0) {
                 Spacer()
                 
-                // Animated mascot area
+                // Illustration Area
                 ZStack {
-                    // Background circles
+                    // Background glow
                     Circle()
-                        .fill(Color.orange.opacity(0.1))
-                        .frame(width: 220, height: 220)
-                        .scaleEffect(pawScale)
-                    
-                    Circle()
-                        .fill(Color.orange.opacity(0.05))
+                        .fill(Color.appOrange.opacity(0.08))
                         .frame(width: 280, height: 280)
-                        .scaleEffect(pawScale * 0.9)
                     
-                    // Main icon with animation
-                    Image(systemName: "pawprint.circle.fill")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 120, height: 120)
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color.orange, Color.orange.opacity(0.8)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 180, height: 180)
+                        .shadow(color: .black.opacity(0.06), radius: 40, x: 0, y: 10)
+                    
+                    // TODO: Replace with actual dog with magnifying glass illustration
+                    Image(systemName: "dog.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.appTextPrimary)
+                    
+                    // Magnifying glass icon
+                    Circle()
+                        .fill(Color.appOrange)
+                        .frame(width: 56, height: 56)
+                        .overlay(
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 24, weight: .semibold))
+                                .foregroundColor(.white)
                         )
-                        .rotationEffect(.degrees(pawRotation))
-                        .shadow(color: .orange.opacity(0.3), radius: 20, x: 0, y: 10)
+                        .shadow(color: .appOrange.opacity(0.4), radius: 12, x: 0, y: 6)
+                        .offset(x: 70, y: 60)
                 }
+                .scaleEffect(illustrationScale)
                 .opacity(showContent ? 1 : 0)
-                .offset(y: showContent ? 0 : 20)
                 
-                Spacer().frame(height: 50)
+                Spacer().frame(height: 48)
                 
-                // Title section
-                VStack(spacing: 16) {
-                    Text("Find Your Fur Babies")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                // Text Content
+                VStack(spacing: 12) {
+                    Text("Find Your\nFur Babies")
+                        .font(.appDisplay)
+                        .foregroundColor(.appTextPrimary)
                         .multilineTextAlignment(.center)
-                        .foregroundColor(.primary)
                     
-                    Text("Apple's on-device AI privately finds every cat & dog in your library. Nothing ever leaves your phone.")
-                        .font(.body)
-                        .foregroundColor(.gray)
+                    Text("On-device AI privately\nfinds your pets.")
+                        .font(.appBody)
+                        .foregroundColor(.appTextSecondary)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 40)
                         .lineSpacing(4)
                 }
                 .opacity(showContent ? 1 : 0)
@@ -87,134 +83,222 @@ struct OnboardingView: View {
                 
                 Spacer()
                 
-                // Bottom section with button or loading
-                VStack(spacing: 24) {
+                // Bottom Section
+                VStack(spacing: 16) {
                     if scanner.isScanning {
-                        // Loading state
-                        VStack(spacing: 20) {
-                            // Progress bar
-                            GeometryReader { geo in
-                                ZStack(alignment: .leading) {
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .fill(Color.gray.opacity(0.2))
-                                        .frame(height: 8)
-                                    
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [Color.orange, Color.orange.opacity(0.8)],
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            )
-                                        )
-                                        .frame(width: geo.size.width * CGFloat(scanner.progress), height: 8)
-                                        .animation(.easeInOut(duration: 0.3), value: scanner.progress)
-                                }
-                            }
-                            .frame(height: 8)
-                            .padding(.horizontal, 40)
-                            
-                            // Animated text
-                            Text(scanner.progressText)
-                                .font(.subheadline.weight(.medium))
-                                .foregroundColor(.gray)
-                                .id(scanner.progressText)
-                                .transition(.opacity)
-                                .animation(.easeInOut(duration: 0.3), value: scanner.progressText)
-                        }
-                    } else if scanner.hasScanned && scanner.foundCount == 0 {
-                        // Empty state
-                        VStack(spacing: 16) {
-                            Image(systemName: "magnifyingglass.circle")
-                                .font(.system(size: 60))
-                                .foregroundColor(.orange.opacity(0.6))
-                            
-                            Text("No fur babies found yet!")
-                                .font(.headline)
-                            
-                            Text("Try adding some pet photos to your library first.")
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                                .multilineTextAlignment(.center)
-                            
-                            Button {
-                                Task { await scanner.startScan() }
-                            } label: {
-                                Text("Scan Again")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundColor(.orange)
-                                    .padding(.horizontal, 24)
-                                    .padding(.vertical, 12)
-                                    .background(Color.orange.opacity(0.1))
-                                    .cornerRadius(20)
-                            }
-                            .padding(.top, 8)
-                        }
+                        // Scanning State
+                        ScanningView(scanner: scanner)
                     } else {
-                        // Main CTA button
+                        // CTA Button
                         Button {
                             Task {
                                 await scanner.requestPermissionAndStartScan()
-                                if scanner.foundCount > 0 {
+                                if scanner.foundCount > 0 || scanner.hasScanned {
                                     withAnimation(.spring()) {
                                         hasCompletedOnboarding = true
                                     }
                                 }
                             }
                         } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "photo.on.rectangle.angled")
-                                Text("Allow Photo Access")
-                            }
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(
-                                LinearGradient(
-                                    colors: [Color.orange, Color.orange.opacity(0.9)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .cornerRadius(20)
-                            .shadow(color: .orange.opacity(0.4), radius: 15, x: 0, y: 8)
+                            Text("Allow Photo Access")
+                                .font(.appBodySemibold)
                         }
-                        .padding(.horizontal, 40)
+                        .buttonStyle(AppPrimaryButtonStyle())
+                        .padding(.horizontal, .appSpacingXXLarge)
                         
                         // Privacy note
-                        HStack(spacing: 6) {
-                            Image(systemName: "lock.shield.fill")
-                                .font(.caption2)
-                            Text("100% Private • On-Device Only")
-                                .font(.caption2)
-                        }
-                        .foregroundColor(.gray.opacity(0.8))
-                        .padding(.top, 8)
+                        Text("Photos never leave your device")
+                            .font(.appCaption)
+                            .foregroundColor(.appTextTertiary)
                     }
                 }
-                .padding(.bottom, 50)
+                .opacity(showContent ? 1 : 0)
+                .padding(.bottom, 48)
             }
         }
         .onAppear {
-            // Entry animations
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
                 showContent = true
             }
-            
-            // Continuous floating animation
             withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
-                pawScale = 1.0
-            }
-            
-            withAnimation(.linear(duration: 20).repeatForever(autoreverses: false)) {
-                pawRotation = 360
+                illustrationScale = 1.0
             }
         }
     }
 }
 
+// MARK: - Scanning View
+struct ScanningView: View {
+    @ObservedObject var scanner: PetScanner
+    @State private var rotation: Double = 0
+    
+    var body: some View {
+        VStack(spacing: 32) {
+            // Progress Ring
+            ProgressRing(
+                progress: scanner.progress,
+                lineWidth: 8,
+                color: .appOrange
+            )
+            .frame(width: 140, height: 140)
+            
+            // Status Text
+            VStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "gear")
+                        .font(.system(size: 16))
+                        .foregroundColor(.appOrange)
+                        .rotationEffect(.degrees(rotation))
+                        .onAppear {
+                            withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
+                                rotation = 360
+                            }
+                        }
+                    
+                    Text(scanner.progressText)
+                        .font(.appCalloutMedium)
+                        .foregroundColor(.appTextPrimary)
+                }
+                
+                Text("Organizing memories locally...")
+                    .font(.appFootnote)
+                    .foregroundColor(.appTextSecondary)
+            }
+            .id(scanner.progressText)
+            .animation(.easeInOut, value: scanner.progressText)
+            
+            // Skip button (for prototype)
+            Button("Skip to Feed (Prototype)") {
+                // Skip logic for testing
+            }
+            .font(.appCallout)
+            .foregroundColor(.appTextSecondary)
+            .padding(.top, 24)
+        }
+        .padding(.horizontal, .appSpacingXXLarge)
+    }
+}
 
+// MARK: - Empty State View
+struct EmptyStateView: View {
+    let onScanAgain: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 32) {
+            Spacer()
+            
+            // Illustration
+            ZStack {
+                Circle()
+                    .fill(Color.appError.opacity(0.08))
+                    .frame(width: 180, height: 180)
+                
+                // TODO: Replace with confused dog illustration
+                Image(systemName: "questionmark.circle")
+                    .font(.system(size: 80))
+                    .foregroundColor(.appError.opacity(0.6))
+            }
+            
+            // Text
+            VStack(spacing: 12) {
+                Text("No fur babies\nfound yet!")
+                    .font(.appHeadline)
+                    .foregroundColor(.appTextPrimary)
+                    .multilineTextAlignment(.center)
+                
+                Text("Try adding some pet photos\nto your library first.")
+                    .font(.appBody)
+                    .foregroundColor(.appTextSecondary)
+                    .multilineTextAlignment(.center)
+            }
+            
+            Spacer()
+            
+            // Ghost Button
+            Button(action: onScanAgain) {
+                Text("Scan Again")
+                    .font(.appCalloutMedium)
+            }
+            .buttonStyle(AppGhostButtonStyle())
+            .padding(.horizontal, .appSpacingXXLarge)
+            .padding(.bottom, 48)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.appBackground.ignoresSafeArea())
+    }
+}
+
+// MARK: - Denied State View
+struct DeniedStateView: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            // Navigation
+            HStack {
+                Text("Home")
+                    .font(.appCalloutMedium)
+                    .foregroundColor(.appOrange)
+                Spacer()
+            }
+            .padding(.horizontal, .appSpacingLarge)
+            .padding(.top, .appSpacingLarge)
+            
+            Spacer()
+            
+            // Content
+            VStack(spacing: 32) {
+                // Sad illustration
+                ZStack {
+                    Circle()
+                        .fill(Color.appError.opacity(0.08))
+                        .frame(width: 120, height: 120)
+                    
+                    // TODO: Replace with sad puppy illustration
+                    Image(systemName: "face.dashed")
+                        .font(.system(size: 50))
+                        .foregroundColor(.appError)
+                }
+                
+                // Text
+                VStack(spacing: 16) {
+                    Text("Needs Photo\nAccess")
+                        .font(.appHeadline)
+                        .foregroundColor(.appTextPrimary)
+                        .multilineTextAlignment(.center)
+                    
+                    Text("FurFrame relies on photo access to anonymously scan and locate your pets on-device. We cannot function without it.")
+                        .font(.appCallout)
+                        .foregroundColor(.appTextSecondary)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                        .padding(.horizontal, 32)
+                }
+            }
+            
+            Spacer()
+            
+            // Bottom Buttons
+            VStack(spacing: 12) {
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    Text("Open Settings")
+                        .font(.appBodySemibold)
+                }
+                .buttonStyle(AppPrimaryButtonStyle())
+                
+                Text("Settings > Privacy > Photos")
+                    .font(.appCaption)
+                    .foregroundColor(.appTextTertiary)
+            }
+            .padding(.horizontal, .appSpacingXXLarge)
+            .padding(.bottom, 48)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.appBackground.ignoresSafeArea())
+    }
+}
 
 #Preview {
     OnboardingView()

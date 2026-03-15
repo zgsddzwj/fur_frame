@@ -11,6 +11,13 @@ import SwiftData
 import SwiftUI
 import Combine
 
+enum PhotoAccessStatus {
+    case notDetermined
+    case authorized
+    case limited
+    case denied
+}
+
 @MainActor
 class PetScanner: ObservableObject {
     @Published var isScanning = false
@@ -18,31 +25,44 @@ class PetScanner: ObservableObject {
     @Published var progress: Double = 0.0
     @Published var foundCount = 0
     @Published var hasScanned = false
-    @Published var currentPhase: ScanPhase = .initial
-    
-    enum ScanPhase {
-        case initial, requestingPermission, scanning, completed, error
-    }
+    @Published var accessStatus: PhotoAccessStatus = .notDetermined
     
     private var modelContext: ModelContext
     
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
+        checkAccessStatus()
+    }
+    
+    func checkAccessStatus() {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        switch status {
+        case .notDetermined:
+            accessStatus = .notDetermined
+        case .authorized:
+            accessStatus = .authorized
+        case .limited:
+            accessStatus = .limited
+        case .denied, .restricted:
+            accessStatus = .denied
+        @unknown default:
+            accessStatus = .notDetermined
+        }
     }
     
     func requestPermissionAndStartScan() async {
-        currentPhase = .requestingPermission
         let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
+        checkAccessStatus()
+        
         if status == .authorized || status == .limited {
             await startScan()
-        } else {
-            currentPhase = .error
         }
     }
     
     func startScan(incremental: Bool = false) async {
+        guard accessStatus == .authorized || accessStatus == .limited else { return }
+        
         isScanning = true
-        currentPhase = .scanning
         progress = 0
         foundCount = 0
         
@@ -58,17 +78,16 @@ class PetScanner: ObservableObject {
         guard total > 0 else {
             isScanning = false
             hasScanned = true
-            currentPhase = .completed
             return
         }
         
-        // Progress text
         let phrases = [
             "Sniffing for dogs...",
             "Looking for cats...",
             "Organizing memories...",
             "Finding fur babies..."
         ]
+        var phraseIndex = 0
         progressText = phrases[0]
         
         let imageManager = PHImageManager.default()
@@ -77,19 +96,16 @@ class PetScanner: ObservableObject {
         requestOptions.deliveryMode = .fastFormat
         requestOptions.isNetworkAccessAllowed = true
         
-        var phraseIndex = 0
-        let phraseUpdateInterval = max(total / 10, 1)
+        let phraseUpdateInterval = max(total / 8, 1)
         
         for i in 0..<total {
             let asset = allAssets.object(at: i)
             
-            // Update phrase periodically
             if i % phraseUpdateInterval == 0 {
                 phraseIndex = (phraseIndex + 1) % phrases.count
                 progressText = phrases[phraseIndex]
             }
             
-            // Skip if already in database
             if !incremental {
                 let id = asset.localIdentifier
                 let descriptor = FetchDescriptor<PetAsset>(predicate: #Predicate { $0.localIdentifier == id })
@@ -106,7 +122,6 @@ class PetScanner: ObservableObject {
         UserDefaults.standard.set(Date(), forKey: "lastScanDate")
         isScanning = false
         hasScanned = true
-        currentPhase = .completed
     }
     
     private func analyzeAsset(_ asset: PHAsset, imageManager: PHImageManager, requestOptions: PHImageRequestOptions) async {
