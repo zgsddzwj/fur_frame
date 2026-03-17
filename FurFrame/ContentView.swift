@@ -59,19 +59,19 @@ struct OnboardingFlowView: View {
                 
             case .scanning:
                 if let scanner = scanner {
-                    ScanningView(scanner: scanner)
-                        .transition(.opacity)
-                        .onChange(of: scanner.hasScanned) { _, hasScanned in
-                            if hasScanned {
-                                if scanner.foundCount == 0 {
-                                    withAnimation {
-                                        currentStep = .empty
-                                    }
-                                } else {
-                                    onComplete()
+                    ScanningView(scanner: scanner, onComplete: {
+                        // Delay slightly to show "Done!" before transitioning
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                            if scanner.foundCount == 0 {
+                                withAnimation {
+                                    currentStep = .empty
                                 }
+                            } else {
+                                onComplete()
                             }
                         }
+                    })
+                    .transition(.opacity)
                 }
                 
             case .empty:
@@ -226,9 +226,11 @@ struct OnboardingView: View {
 // MARK: - Scanning View
 struct ScanningView: View {
     @ObservedObject var scanner: PetScanner
+    let onComplete: () -> Void
+    
     @State private var pawOffset: CGFloat = 0
     @State private var dotCount = 0
-    let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    @State private var timerCancellable: Cancellable?
     
     var body: some View {
         ZStack {
@@ -327,12 +329,9 @@ struct ScanningView: View {
                     
                     // Status text with animated dots
                     VStack(spacing: 8) {
-                        Text(scanner.progressText + String(repeating: ".", count: dotCount))
+                        Text(displayText)
                             .font(.appHeadline3)
                             .foregroundColor(.appTextPrimary)
-                            .onReceive(timer) { _ in
-                                dotCount = (dotCount + 1) % 4
-                            }
                         
                         Text("Photos never leave your device")
                             .font(.appCaption)
@@ -343,6 +342,34 @@ struct ScanningView: View {
                 Spacer()
             }
             .padding(.vertical, 60)
+        }
+        .onAppear {
+            // Start timer for dots animation
+            let timer = Timer.publish(every: 0.5, on: .main, in: .common)
+            timerCancellable = timer.sink { _ in
+                if !scanner.hasScanned {
+                    dotCount = (dotCount + 1) % 4
+                }
+            }
+            timer.connect()
+        }
+        .onChange(of: scanner.hasScanned) { _, hasScanned in
+            if hasScanned {
+                // Stop timer and trigger completion
+                timerCancellable?.cancel()
+                onComplete()
+            }
+        }
+        .onDisappear {
+            timerCancellable?.cancel()
+        }
+    }
+    
+    private var displayText: String {
+        if scanner.hasScanned {
+            return "Done!"
+        } else {
+            return scanner.progressText + String(repeating: ".", count: dotCount)
         }
     }
 }
