@@ -425,7 +425,8 @@ struct PetCard: View {
     var onTap: (PetAsset) -> Void
     @Environment(\.modelContext) private var modelContext
     @State private var height: CGFloat = 0
-    @State private var showActionMenu = false
+    @State private var isPressing = false
+    @State private var showBling = false
     
     init(asset: PetAsset, namespace: Namespace.ID, isSelected: Bool, validateAsset: @escaping (PetAsset) -> Void, onTap: @escaping (PetAsset) -> Void) {
         self.asset = asset
@@ -439,94 +440,139 @@ struct PetCard: View {
     
     var body: some View {
         ZStack {
-            // Photo
+            // Photo with press animation
             PHAssetImage(localIdentifier: asset.localIdentifier, targetSize: CGSize(width: 400, height: 400))
                 .aspectRatio(contentMode: .fit)
                 .frame(minWidth: 0, maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: .appRadiusLarge))
                 .matchedGeometryEffect(id: asset.localIdentifier, in: namespace, isSource: !isSelected)
+                .scaleEffect(isPressing ? 0.96 : 1.0)
+                .overlay(
+                    RoundedRectangle(cornerRadius: .appRadiusLarge)
+                        .fill(Color.black.opacity(isPressing ? 0.15 : 0))
+                )
                 .onTapGesture {
-                    if showActionMenu {
-                        withAnimation(.spring()) {
-                            showActionMenu = false
-                        }
-                    } else {
-                        onTap(asset)
-                    }
+                    onTap(asset)
                 }
-                .onLongPressGesture(minimumDuration: 0.3) {
-                    withAnimation(.spring()) {
-                        showActionMenu = true
+                .onLongPressGesture(minimumDuration: 0.4, pressing: { pressing in
+                    withAnimation(.spring(response: 0.3)) {
+                        isPressing = pressing
                     }
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                }) {
+                    // Long press completed - hide photo
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                        asset.isHidden = true
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    }
                 }
                 .onAppear {
                     validateAsset(asset)
                 }
             
-            // Action Menu Overlay
-            if showActionMenu {
-                Color.black.opacity(0.4)
-                    .clipShape(RoundedRectangle(cornerRadius: .appRadiusLarge))
-                    .onTapGesture {
-                        withAnimation(.spring()) {
-                            showActionMenu = false
+            // Hide hint overlay when pressing
+            if isPressing {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        HStack(spacing: 4) {
+                            Image(systemName: "eye.slash")
+                            Text("Hide")
                         }
-                    }
-                
-                VStack(spacing: 16) {
-                    // Hide button
-                    ActionButton(
-                        icon: "eye.slash",
-                        text: "Hide",
-                        color: .white
-                    ) {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                            asset.isHidden = true
-                            showActionMenu = false
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        }
-                    }
-                    
-                    // Favorite button
-                    ActionButton(
-                        icon: asset.isFavorite ? "heart.fill" : "heart",
-                        text: asset.isFavorite ? "Favorited" : "Favorite",
-                        color: asset.isFavorite ? .appError : .white
-                    ) {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                            asset.isFavorite.toggle()
-                            showActionMenu = false
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        }
+                        .font(.appCaptionMedium)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.ultraThinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .padding(8)
                     }
                 }
-                .padding(.horizontal, 20)
+            }
+            
+            // Bling effect overlay
+            if showBling {
+                BlingEffect()
+                    .clipShape(RoundedRectangle(cornerRadius: .appRadiusLarge))
+            }
+            
+            // Favorite button - always visible at bottom right
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                            asset.isFavorite.toggle()
+                            if asset.isFavorite {
+                                triggerBling()
+                            }
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }
+                    } label: {
+                        ZStack {
+                            // Bling animation background
+                            if asset.isFavorite {
+                                Circle()
+                                    .fill(Color.appError.opacity(0.3))
+                                    .frame(width: 44, height: 44)
+                                    .scaleEffect(showBling ? 1.5 : 1.0)
+                                    .opacity(showBling ? 0 : 1)
+                            }
+                            
+                            Image(systemName: asset.isFavorite ? "heart.fill" : "heart")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(asset.isFavorite ? .appError : .white)
+                                .padding(10)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                                .scaleEffect(asset.isFavorite ? 1.1 : 1.0)
+                        }
+                    }
+                    .padding(8)
+                }
+            }
+        }
+    }
+    
+    private func triggerBling() {
+        showBling = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            withAnimation(.easeOut(duration: 0.2)) {
+                showBling = false
             }
         }
     }
 }
 
-// MARK: - Action Button
-struct ActionButton: View {
-    let icon: String
-    let text: String
-    let color: Color
-    let action: () -> Void
+// MARK: - Bling Effect
+struct BlingEffect: View {
+    @State private var scale: CGFloat = 0.5
+    @State private var opacity: Double = 1
     
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .semibold))
-                Text(text)
-                    .font(.appCalloutMedium)
+        ZStack {
+            // Star burst
+            ForEach(0..<8) { i in
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(Color.appError)
+                    .frame(width: 4, height: 20)
+                    .offset(y: -30)
+                    .rotationEffect(.degrees(Double(i) * 45))
             }
-            .foregroundColor(color)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            
+            // Center flash
+            Circle()
+                .fill(Color.appError.opacity(0.5))
+                .frame(width: 60, height: 60)
+        }
+        .scaleEffect(scale)
+        .opacity(opacity)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.3)) {
+                scale = 2.0
+                opacity = 0
+            }
         }
     }
 }
