@@ -35,15 +35,7 @@ struct OnboardingFlowView: View {
     let onComplete: () -> Void
     
     @State private var currentStep: OnboardingStep = .welcome
-    @StateObject private var scanner: PetScanner
-    
-    init(onComplete: @escaping () -> Void) {
-        self.onComplete = onComplete
-        let schema = Schema([PetAsset.self])
-        let config = ModelConfiguration(schema: schema, groupContainer: .identifier("group.com.furframe.app"))
-        let container = try! ModelContainer(for: schema, configurations: [config])
-        _scanner = StateObject(wrappedValue: PetScanner(modelContext: ModelContext(container)))
-    }
+    @State private var scanner: PetScanner? = nil
     
     enum OnboardingStep {
         case welcome           // 初始页面
@@ -66,19 +58,21 @@ struct OnboardingFlowView: View {
                 .transition(.opacity)
                 
             case .scanning:
-                ScanningView(scanner: scanner)
-                    .transition(.opacity)
-                    .onChange(of: scanner.hasScanned) { _, hasScanned in
-                        if hasScanned {
-                            if scanner.foundCount == 0 {
-                                withAnimation {
-                                    currentStep = .empty
+                if let scanner = scanner {
+                    ScanningView(scanner: scanner)
+                        .transition(.opacity)
+                        .onChange(of: scanner.hasScanned) { _, hasScanned in
+                            if hasScanned {
+                                if scanner.foundCount == 0 {
+                                    withAnimation {
+                                        currentStep = .empty
+                                    }
+                                } else {
+                                    onComplete()
                                 }
-                            } else {
-                                onComplete()
                             }
                         }
-                    }
+                }
                 
             case .empty:
                 EmptyStateView {
@@ -87,14 +81,14 @@ struct OnboardingFlowView: View {
                             currentStep = .scanning
                         }
                         try? await Task.sleep(nanoseconds: 350_000_000)
-                        await scanner.startScan()
+                        await scanner?.startScan()
                     }
                 }
                 .transition(.opacity)
                 
             case .denied:
                 DeniedStateView()
-                    .transition(.opacity)
+                .transition(.opacity)
             }
         }
     }
@@ -104,13 +98,26 @@ struct OnboardingFlowView: View {
         
         switch status {
         case .authorized, .limited:
-            // First switch to scanning page
+            // Create scanner after getting permission
+            let schema = Schema([PetAsset.self])
+            let config = ModelConfiguration(schema: schema, groupContainer: .identifier("group.com.furframe.app"))
+            guard let container = try? ModelContainer(for: schema, configurations: [config]) else {
+                return
+            }
+            
+            let newScanner = PetScanner(modelContext: ModelContext(container))
+            await MainActor.run {
+                self.scanner = newScanner
+            }
+            
+            // Switch to scanning page
             withAnimation(.easeInOut(duration: 0.3)) {
                 currentStep = .scanning
             }
-            // Wait for animation to complete before starting scan
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            await scanner.startScan()
+            
+            // Wait for view to appear
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+            await newScanner.startScan()
             
         case .denied, .restricted:
             withAnimation {
