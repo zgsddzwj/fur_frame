@@ -15,6 +15,7 @@ struct MemoriesView: View {
     @Query(filter: #Predicate<PetAsset> { $0.isHero == true && $0.isHidden == false }) private var heroAssets: [PetAsset]
     @Namespace private var animation
     @State private var selectedAsset: PetAsset?
+    @State private var selectedForHide: PetAsset? = nil
     @State private var heroRefreshTrigger = UUID()
     @State private var isPhotoLibraryLimited = false
     @State private var showSettings = false
@@ -85,12 +86,22 @@ struct MemoriesView: View {
                                 assets: assets,
                                 namespace: animation,
                                 selectedAssetId: selectedAsset?.localIdentifier,
+                                selectedForHideId: selectedForHide?.localIdentifier,
                                 validateAsset: { asset in
                                     validateAsset(asset)
                                 },
                                 onTap: { asset in
                                     withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                                         selectedAsset = asset
+                                    }
+                                },
+                                onLongPress: { asset in
+                                    withAnimation(.spring()) {
+                                        if selectedForHide?.localIdentifier == asset.localIdentifier {
+                                            selectedForHide = nil
+                                        } else {
+                                            selectedForHide = asset
+                                        }
                                     }
                                 }
                             )
@@ -380,8 +391,10 @@ struct MasonryGrid: View {
     let assets: [PetAsset]
     var namespace: Namespace.ID
     var selectedAssetId: String?
+    var selectedForHideId: String?
     var validateAsset: (PetAsset) -> Void
     var onTap: (PetAsset) -> Void
+    var onLongPress: (PetAsset) -> Void
     
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -394,8 +407,10 @@ struct MasonryGrid: View {
                         asset: asset,
                         namespace: namespace,
                         isSelected: selectedAssetId == asset.localIdentifier,
+                        isSelectedForHide: selectedForHideId == asset.localIdentifier,
                         validateAsset: validateAsset,
-                        onTap: onTap
+                        onTap: onTap,
+                        onLongPress: onLongPress
                     )
                 }
             }
@@ -406,8 +421,10 @@ struct MasonryGrid: View {
                         asset: asset,
                         namespace: namespace,
                         isSelected: selectedAssetId == asset.localIdentifier,
+                        isSelectedForHide: selectedForHideId == asset.localIdentifier,
                         validateAsset: validateAsset,
-                        onTap: onTap
+                        onTap: onTap,
+                        onLongPress: onLongPress
                     )
                 }
             }
@@ -421,19 +438,22 @@ struct PetCard: View {
     let asset: PetAsset
     var namespace: Namespace.ID
     var isSelected: Bool
+    var isSelectedForHide: Bool
     var validateAsset: (PetAsset) -> Void
     var onTap: (PetAsset) -> Void
+    var onLongPress: (PetAsset) -> Void
     @Environment(\.modelContext) private var modelContext
     @State private var height: CGFloat = 0
     @State private var isPressing = false
-    @State private var showHideButton = false
     
-    init(asset: PetAsset, namespace: Namespace.ID, isSelected: Bool, validateAsset: @escaping (PetAsset) -> Void, onTap: @escaping (PetAsset) -> Void) {
+    init(asset: PetAsset, namespace: Namespace.ID, isSelected: Bool, isSelectedForHide: Bool = false, validateAsset: @escaping (PetAsset) -> Void, onTap: @escaping (PetAsset) -> Void, onLongPress: @escaping (PetAsset) -> Void) {
         self.asset = asset
         self.namespace = namespace
         self.isSelected = isSelected
+        self.isSelectedForHide = isSelectedForHide
         self.validateAsset = validateAsset
         self.onTap = onTap
+        self.onLongPress = onLongPress
         let seed = asset.localIdentifier.hashValue
         self._height = State(initialValue: CGFloat(160 + (abs(seed) % 120)))
     }
@@ -449,12 +469,12 @@ struct PetCard: View {
                 .scaleEffect(isPressing ? 0.96 : 1.0)
                 .overlay(
                     RoundedRectangle(cornerRadius: .appRadiusLarge)
-                        .fill(Color.black.opacity(showHideButton ? 0.3 : 0))
+                        .fill(Color.black.opacity(isSelectedForHide ? 0.3 : 0))
                 )
                 .onTapGesture {
-                    if showHideButton {
+                    if isSelectedForHide {
                         withAnimation(.spring()) {
-                            showHideButton = false
+                            onLongPress(asset) // Toggle off
                         }
                     } else {
                         onTap(asset)
@@ -468,22 +488,19 @@ struct PetCard: View {
                         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     }
                 }) {
-                    // Long press completed - show hide button
-                    withAnimation(.spring()) {
-                        showHideButton = true
-                    }
+                    // Long press completed - toggle hide selection
+                    onLongPress(asset)
                 }
                 .onAppear {
                     validateAsset(asset)
                 }
             
-            // Hide button overlay
-            if showHideButton {
+            // Hide button overlay (only for selected card)
+            if isSelectedForHide {
                 VStack(spacing: 12) {
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                             asset.isHidden = true
-                            showHideButton = false
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         }
                     } label: {
@@ -504,28 +521,25 @@ struct PetCard: View {
                 }
             }
             
-            // Favorite button - always visible at bottom right
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                            asset.isFavorite.toggle()
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        }
-                    } label: {
-                        Image(systemName: asset.isFavorite ? "heart.fill" : "heart")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(asset.isFavorite ? .appError : .white)
-                            .padding(10)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
+            // Favorite button - always visible at bottom right, positioned relative to card
+            GeometryReader { geo in
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                        asset.isFavorite.toggle()
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     }
-                    .padding(8)
+                } label: {
+                    Image(systemName: asset.isFavorite ? "heart.fill" : "heart")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(asset.isFavorite ? .appError : .white)
+                        .padding(10)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
                 }
+                .position(x: geo.size.width - 24, y: geo.size.height - 24)
             }
         }
+        .frame(height: height)
     }
 }
 
