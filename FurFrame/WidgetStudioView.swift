@@ -18,7 +18,7 @@ enum WidgetSize: String, CaseIterable, Identifiable {
 }
 
 enum WidgetTheme: String, CaseIterable, Identifiable {
-    case minimal, polaroid, film, polaroidDate, standbyClock
+    case minimal, polaroid, polaroidDate, film, standbyClock
     var id: String { self.rawValue }
     
     var label: String {
@@ -569,12 +569,15 @@ struct BottomSheet: View {
             // Content
             if selectedTab == 0 {
                 ThemesGrid(selectedTheme: $selectedTheme, isPro: isPro, onThemeTap: onThemeTap)
+                    .frame(height: 140)
             } else {
                 SourceSelector(albumSource: $albumSource)
+                    .frame(height: 140)
             }
             
             Spacer()
         }
+        .frame(height: 260)
         .background(Color.appSheetBackground)
         .cornerRadius(.appRadiusXXLarge, corners: [.topLeft, .topRight])
     }
