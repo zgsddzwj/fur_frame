@@ -9,6 +9,7 @@ import SwiftUI
 import SwiftData
 import Photos
 import WidgetKit
+import Combine
 
 enum WidgetSize: String, CaseIterable, Identifiable {
     case small, medium, large
@@ -17,7 +18,7 @@ enum WidgetSize: String, CaseIterable, Identifiable {
 }
 
 enum WidgetTheme: String, CaseIterable, Identifiable {
-    case minimal, polaroid, film
+    case minimal, polaroid, film, polaroidDate, standbyClock
     var id: String { self.rawValue }
     
     var label: String {
@@ -25,13 +26,15 @@ enum WidgetTheme: String, CaseIterable, Identifiable {
         case .minimal: return "Minimal"
         case .polaroid: return "Polaroid"
         case .film: return "Film Pro"
+        case .polaroidDate: return "Polaroid+Date"
+        case .standbyClock: return "StandBy Clock"
         }
     }
     
     var isPro: Bool {
         switch self {
         case .minimal, .polaroid: return false
-        case .film: return true
+        case .film, .polaroidDate, .standbyClock: return true
         }
     }
 }
@@ -268,9 +271,13 @@ struct WidgetPreviewCard: View {
             case .minimal:
                 MinimalWidgetPreview(image: previewImage)
             case .polaroid:
-                PolaroidWidgetPreview(image: previewImage)
+                PolaroidWidgetPreview(image: previewImage, showDate: false)
             case .film:
                 FilmWidgetPreview(image: previewImage)
+            case .polaroidDate:
+                PolaroidWidgetPreview(image: previewImage, showDate: true)
+            case .standbyClock:
+                StandByClockWidgetPreview(image: previewImage)
             }
         }
         .frame(width: frameSize.width, height: min(frameSize.height, maxHeight * 0.95))
@@ -335,6 +342,14 @@ struct MinimalWidgetPreview: View {
 
 struct PolaroidWidgetPreview: View {
     let image: UIImage?
+    let showDate: Bool
+    let date: Date?
+    
+    init(image: UIImage?, showDate: Bool = false, date: Date? = nil) {
+        self.image = image
+        self.showDate = showDate
+        self.date = date
+    }
     
     var body: some View {
         GeometryReader { geo in
@@ -355,12 +370,21 @@ struct PolaroidWidgetPreview: View {
                             .background(Color.appOrange.opacity(0.15))
                     }
                 }
-                .frame(height: geo.size.height * 0.75) // 图片占75%高度
+                .frame(height: geo.size.height * (showDate ? 0.65 : 0.75))
                 .padding(.horizontal, 12)
                 .padding(.top, 12)
                 .clipped()
                 
                 Spacer()
+                
+                if showDate, let date = date {
+                    // Handwritten date style
+                    Text(date.formatted(date: .abbreviated, time: .omitted))
+                        .font(.system(size: min(12, geo.size.height * 0.06), design: .serif))
+                        .foregroundColor(.appTextSecondary)
+                        .rotationEffect(.degrees(-3))
+                        .padding(.bottom, 4)
+                }
                 
                 Text("memories")
                     .font(.system(size: min(14, geo.size.height * 0.08), design: .serif))
@@ -432,6 +456,82 @@ struct FilmWidgetPreview: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: .appRadiusMedium))
         }
+    }
+}
+
+// MARK: - StandBy Clock Widget Preview
+struct StandByClockWidgetPreview: View {
+    let image: UIImage?
+    @State private var currentTime = Date()
+    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    
+    var body: some View {
+        GeometryReader { geo in
+            HStack(spacing: 0) {
+                // Left side - Pet photo in circle
+                ZStack {
+                    if let image = image {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: geo.size.height * 0.7, height: geo.size.height * 0.7)
+                            .clipShape(Circle())
+                    } else {
+                        Circle()
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(width: geo.size.height * 0.7, height: geo.size.height * 0.7)
+                        
+                        Image(systemName: "pawprint.fill")
+                            .font(.system(size: geo.size.height * 0.3))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    
+                    // Neon glow effect
+                    Circle()
+                        .stroke(Color(hex: "FF6B35").opacity(0.6), lineWidth: 3)
+                        .frame(width: geo.size.height * 0.75, height: geo.size.height * 0.75)
+                        .blur(radius: 4)
+                }
+                .frame(width: geo.size.width * 0.45)
+                
+                // Right side - Neon clock
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(timeString(from: currentTime))
+                        .font(.system(size: geo.size.height * 0.4, weight: .bold, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color(hex: "FF6B35"), Color(hex: "FFD60A")],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .shadow(color: Color(hex: "FF6B35").opacity(0.5), radius: 8, x: 0, y: 0)
+                    
+                    Text(dateString(from: currentTime))
+                        .font(.system(size: geo.size.height * 0.12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.8))
+                }
+                .frame(width: geo.size.width * 0.55)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black)
+            .clipShape(RoundedRectangle(cornerRadius: .appRadiusMedium))
+            .onReceive(timer) { _ in
+                currentTime = Date()
+            }
+        }
+    }
+    
+    private func timeString(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm"
+        return formatter.string(from: date)
+    }
+    
+    private func dateString(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMM d"
+        return formatter.string(from: date)
     }
 }
 
@@ -575,9 +675,13 @@ struct ThemeThumbnailButton: View {
         case .minimal:
             MinimalWidgetPreview(image: nil)
         case .polaroid:
-            PolaroidWidgetPreview(image: nil)
+            PolaroidWidgetPreview(image: nil, showDate: false)
         case .film:
             FilmWidgetPreview(image: nil)
+        case .polaroidDate:
+            PolaroidWidgetPreview(image: nil, showDate: true, date: Date())
+        case .standbyClock:
+            StandByClockWidgetPreview(image: nil)
         }
     }
 }

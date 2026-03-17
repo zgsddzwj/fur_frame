@@ -116,8 +116,7 @@ struct MemoriesView: View {
                     }
                 }
             }
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarBackground(.white, for: .navigationBar)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .toolbarColorScheme(.light, for: .navigationBar)
             .fullScreenCover(isPresented: $showSettings) {
                 SettingsView()

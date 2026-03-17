@@ -154,6 +154,9 @@ struct AuroraHeaderCard: View {
                     )
                 )
             
+            // Particle effects overlay
+            ParticleEffectView()
+            
             VStack(spacing: 8) {
                 Text("FurFrame Pro")
                     .font(.appHeadline)
@@ -166,6 +169,69 @@ struct AuroraHeaderCard: View {
             .padding(.vertical, 24)
         }
         .padding(.horizontal, .appSpacingLarge)
+    }
+}
+
+// MARK: - Particle Effect View
+struct ParticleEffectView: View {
+    @State private var particles: [Particle] = []
+    let timer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
+    
+    struct Particle: Identifiable {
+        let id = UUID()
+        var x: CGFloat
+        var y: CGFloat
+        var size: CGFloat
+        var opacity: Double
+        var speed: CGFloat
+    }
+    
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                ForEach(particles) { particle in
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: particle.size, height: particle.size)
+                        .position(x: particle.x, y: particle.y)
+                        .opacity(particle.opacity)
+                }
+            }
+            .onReceive(timer) { _ in
+                updateParticles(in: geo.size)
+            }
+            .onAppear {
+                createInitialParticles(in: geo.size)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: .appRadiusXLarge))
+    }
+    
+    private func createInitialParticles(in size: CGSize) {
+        particles = (0..<15).map { _ in
+            Particle(
+                x: CGFloat.random(in: 0...size.width),
+                y: CGFloat.random(in: 0...size.height),
+                size: CGFloat.random(in: 2...6),
+                opacity: Double.random(in: 0.3...0.8),
+                speed: CGFloat.random(in: 0.3...1.0)
+            )
+        }
+    }
+    
+    private func updateParticles(in size: CGSize) {
+        for i in particles.indices {
+            particles[i].y -= particles[i].speed
+            particles[i].opacity -= 0.005
+            
+            // Reset particle when it goes off screen or fades out
+            if particles[i].y < 0 || particles[i].opacity <= 0 {
+                particles[i].y = size.height + 10
+                particles[i].x = CGFloat.random(in: 0...size.width)
+                particles[i].opacity = Double.random(in: 0.3...0.8)
+                particles[i].size = CGFloat.random(in: 2...6)
+            }
+        }
     }
 }
 
