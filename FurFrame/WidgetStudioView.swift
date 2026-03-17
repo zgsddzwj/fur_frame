@@ -107,6 +107,7 @@ struct WidgetStudioView: View {
                         size: selectedSize,
                         theme: selectedTheme,
                         currentAsset: currentDisplayAsset,
+                        assetDate: currentDisplayAsset?.creationDate,
                         previewImage: previewImage,
                         animate: animatePreview
                     )
@@ -243,6 +244,7 @@ struct PreviewArea: View {
     let size: WidgetSize
     let theme: WidgetTheme
     let currentAsset: PetAsset?
+    let assetDate: Date?
     let previewImage: UIImage?
     let animate: Bool
     
@@ -256,6 +258,7 @@ struct PreviewArea: View {
                     size: size,
                     theme: theme,
                     previewImage: previewImage,
+                    assetDate: assetDate,
                     maxHeight: geo.size.height
                 )
                 .shadow(color: .black.opacity(0.1), radius: 30, x: 0, y: 15)
@@ -274,6 +277,7 @@ struct WidgetPreviewCard: View {
     let size: WidgetSize
     let theme: WidgetTheme
     let previewImage: UIImage?
+    let assetDate: Date?
     var maxHeight: CGFloat = .infinity
     
     var body: some View {
@@ -288,7 +292,7 @@ struct WidgetPreviewCard: View {
             case .film:
                 FilmWidgetPreview(image: previewImage)
             case .polaroidDate:
-                PolaroidWidgetPreview(image: previewImage, showDate: true)
+                PolaroidWidgetPreview(image: previewImage, showDate: true, date: assetDate ?? Date())
             case .standbyClock:
                 StandByClockWidgetPreview(image: previewImage)
             }
