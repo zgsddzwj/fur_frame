@@ -62,20 +62,33 @@ struct WidgetStudioView: View {
     
     // 计算当前应该显示哪张照片
     var currentDisplayAsset: PetAsset? {
-        // 如果当前设置的是 Favorites Only，但收藏列表为空，返回 nil
-        if displayedAssets.isEmpty {
+        // 确定实际要显示的数据源
+        let effectiveAssets: [PetAsset]
+        
+        if albumSource == "Favorites Only" {
+            // Favorites Only 模式下，如果有收藏就显示收藏，否则回退到所有照片
+            effectiveAssets = favoriteAssets.isEmpty ? allAssets : favoriteAssets
+        } else {
+            effectiveAssets = allAssets
+        }
+        
+        // 如果没有可用照片，返回 nil
+        if effectiveAssets.isEmpty {
             return nil
         }
-        // 如果有 Hero 照片且在列表中，优先显示 Hero
-        if let hero = heroAssets.first, displayedAssets.contains(where: { $0.localIdentifier == hero.localIdentifier }) {
+        
+        // 如果有 Hero 照片且在有效列表中，优先显示 Hero
+        if let hero = heroAssets.first, effectiveAssets.contains(where: { $0.localIdentifier == hero.localIdentifier }) {
             return hero
         }
-        // 如果之前显示的照片还在列表中，继续显示它
-        if !displayedAssetId.isEmpty, let existing = displayedAssets.first(where: { $0.localIdentifier == displayedAssetId }) {
+        
+        // 如果之前显示的照片还在有效列表中，继续显示它
+        if !displayedAssetId.isEmpty, let existing = effectiveAssets.first(where: { $0.localIdentifier == displayedAssetId }) {
             return existing
         }
+        
         // 否则显示列表中的第一张
-        return displayedAssets.first
+        return effectiveAssets.first
     }
     
     var body: some View {
