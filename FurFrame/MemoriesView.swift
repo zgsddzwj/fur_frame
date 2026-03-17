@@ -425,6 +425,7 @@ struct PetCard: View {
     var onTap: (PetAsset) -> Void
     @Environment(\.modelContext) private var modelContext
     @State private var height: CGFloat = 0
+    @State private var showActionMenu = false
     
     init(asset: PetAsset, namespace: Namespace.ID, isSelected: Bool, validateAsset: @escaping (PetAsset) -> Void, onTap: @escaping (PetAsset) -> Void) {
         self.asset = asset
@@ -437,51 +438,95 @@ struct PetCard: View {
     }
     
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack {
+            // Photo
             PHAssetImage(localIdentifier: asset.localIdentifier, targetSize: CGSize(width: 400, height: 400))
                 .aspectRatio(contentMode: .fit)
                 .frame(minWidth: 0, maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: .appRadiusLarge))
                 .matchedGeometryEffect(id: asset.localIdentifier, in: namespace, isSource: !isSelected)
                 .onTapGesture {
-                    onTap(asset)
+                    if showActionMenu {
+                        withAnimation(.spring()) {
+                            showActionMenu = false
+                        }
+                    } else {
+                        onTap(asset)
+                    }
+                }
+                .onLongPressGesture(minimumDuration: 0.3) {
+                    withAnimation(.spring()) {
+                        showActionMenu = true
+                    }
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 }
                 .onAppear {
                     validateAsset(asset)
                 }
             
-            VStack(spacing: 8) {
-                // Hide button
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                        asset.isHidden = true
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            // Action Menu Overlay
+            if showActionMenu {
+                Color.black.opacity(0.4)
+                    .clipShape(RoundedRectangle(cornerRadius: .appRadiusLarge))
+                    .onTapGesture {
+                        withAnimation(.spring()) {
+                            showActionMenu = false
+                        }
                     }
-                } label: {
-                    Image(systemName: "eye.slash")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(10)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Circle())
-                }
                 
-                // Favorite button
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                        asset.isFavorite.toggle()
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                VStack(spacing: 16) {
+                    // Hide button
+                    ActionButton(
+                        icon: "eye.slash",
+                        text: "Hide",
+                        color: .white
+                    ) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                            asset.isHidden = true
+                            showActionMenu = false
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }
                     }
-                } label: {
-                    Image(systemName: asset.isFavorite ? "heart.fill" : "heart")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(asset.isFavorite ? .appError : .white)
-                        .padding(10)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Circle())
+                    
+                    // Favorite button
+                    ActionButton(
+                        icon: asset.isFavorite ? "heart.fill" : "heart",
+                        text: asset.isFavorite ? "Favorited" : "Favorite",
+                        color: asset.isFavorite ? .appError : .white
+                    ) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                            asset.isFavorite.toggle()
+                            showActionMenu = false
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }
+                    }
                 }
+                .padding(.horizontal, 20)
             }
-            .padding(10)
+        }
+    }
+}
+
+// MARK: - Action Button
+struct ActionButton: View {
+    let icon: String
+    let text: String
+    let color: Color
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .semibold))
+                Text(text)
+                    .font(.appCalloutMedium)
+            }
+            .foregroundColor(color)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
         }
     }
 }
