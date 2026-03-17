@@ -31,16 +31,36 @@ struct FurFrameApp: App {
         do {
             return try ModelContainer(for: schema, configurations: [appGroupConfig])
         } catch {
-            // Fallback to default container if App Group fails
-            print("App Group container failed, using default: \(error)")
-            let defaultConfig = ModelConfiguration(
-                schema: schema,
-                isStoredInMemoryOnly: false
-            )
+            // If migration fails, try to delete old store and recreate
+            print("App Group container failed, attempting to reset: \(error)")
+            
+            // Delete old store files
+            if let appGroupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.furframe.app") {
+                let storeURL = appGroupURL.appendingPathComponent("Library/Application Support/default.store")
+                if FileManager.default.fileExists(atPath: storeURL.path) {
+                    try? FileManager.default.removeItem(at: storeURL)
+                }
+                // Also delete related files
+                let shmURL = appGroupURL.appendingPathComponent("Library/Application Support/default.store-shm")
+                let walURL = appGroupURL.appendingPathComponent("Library/Application Support/default.store-wal")
+                try? FileManager.default.removeItem(at: shmURL)
+                try? FileManager.default.removeItem(at: walURL)
+            }
+            
+            // Try creating again
             do {
-                return try ModelContainer(for: schema, configurations: [defaultConfig])
+                return try ModelContainer(for: schema, configurations: [appGroupConfig])
             } catch {
-                fatalError("Could not create ModelContainer: \(error)")
+                print("Reset failed, using default container: \(error)")
+                let defaultConfig = ModelConfiguration(
+                    schema: schema,
+                    isStoredInMemoryOnly: false
+                )
+                do {
+                    return try ModelContainer(for: schema, configurations: [defaultConfig])
+                } catch {
+                    fatalError("Could not create ModelContainer: \(error)")
+                }
             }
         }
     }()
