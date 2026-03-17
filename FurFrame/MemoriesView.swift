@@ -12,9 +12,10 @@ import Photos
 struct MemoriesView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \PetAsset.creationDate, order: .reverse) private var assets: [PetAsset]
-    @State private var heroAsset: PetAsset?
+    @Query(filter: #Predicate<PetAsset> { $0.isHero == true }) private var heroAssets: [PetAsset]
     @Namespace private var animation
     @State private var selectedAsset: PetAsset?
+    @State private var heroRefreshTrigger = UUID()
     @State private var isPhotoLibraryLimited = false
     @State private var showSettings = false
     @State private var showStudio = false
@@ -48,7 +49,7 @@ struct MemoriesView: View {
                         }
                         
                         // Hero Section
-                        if let hero = heroAsset ?? assets.randomElement() {
+                        if let hero = heroAssets.first ?? assets.randomElement() {
                             HeroSection(
                                 asset: hero,
                                 namespace: animation,
@@ -58,6 +59,7 @@ struct MemoriesView: View {
                                     }
                                 }
                             )
+                            .id(heroRefreshTrigger)
                             .padding(.horizontal, .appSpacingLarge)
                             .padding(.top, .appSpacingMedium)
                         }
@@ -125,8 +127,9 @@ struct MemoriesView: View {
                     }
                 }
             }
-            .toolbarBackground(scrollOffset < -100 ? .visible : .hidden, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbarBackground(.white, for: .navigationBar)
+            .toolbarColorScheme(.light, for: .navigationBar)
             .fullScreenCover(isPresented: $showSettings) {
                 SettingsView()
             }
@@ -138,9 +141,15 @@ struct MemoriesView: View {
                     asset: asset,
                     namespace: animation,
                     onSetAsHero: {
-                        withAnimation(.spring()) {
-                            heroAsset = asset
+                        // 清除之前的 Hero 标记
+                        for hero in heroAssets {
+                            hero.isHero = false
                         }
+                        // 设置新的 Hero
+                        asset.isHero = true
+                        try? modelContext.save()
+                        // 强制刷新 Hero Section
+                        heroRefreshTrigger = UUID()
                     },
                     onClose: {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
@@ -153,8 +162,20 @@ struct MemoriesView: View {
         }
         .onAppear {
             checkPhotoLibraryStatus()
-            if heroAsset == nil && !assets.isEmpty {
-                heroAsset = assets.randomElement()
+            // 配置导航栏外观 - 隐藏底部横线
+            let appearance = UINavigationBarAppearance()
+            appearance.configureWithOpaqueBackground()
+            appearance.backgroundColor = .white
+            appearance.shadowColor = .clear
+            UINavigationBar.appearance().standardAppearance = appearance
+            UINavigationBar.appearance().compactAppearance = appearance
+            UINavigationBar.appearance().scrollEdgeAppearance = appearance
+            // 如果没有设置 Hero，随机选择一个作为默认 Hero
+            if heroAssets.isEmpty && !assets.isEmpty {
+                if let randomAsset = assets.randomElement() {
+                    randomAsset.isHero = true
+                    try? modelContext.save()
+                }
             }
         }
     }
