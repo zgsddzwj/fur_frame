@@ -265,7 +265,6 @@ struct PreviewArea: View {
                 .scaleEffect(animate ? 1.0 : 0.95)
                 .opacity(animate ? 1.0 : 0.7)
                 .animation(.spring(response: 0.4, dampingFraction: 0.7), value: animate)
-                .rotationEffect(.degrees(theme == .polaroid ? -2 : 0))
             }
         }
         .frame(maxHeight: .infinity)
@@ -399,7 +398,6 @@ struct PolaroidWidgetPreview: View {
                     Text(date.formatted(date: .abbreviated, time: .omitted))
                         .font(.system(size: min(12, geo.size.height * 0.06), design: .serif))
                         .foregroundColor(.appTextSecondary)
-                        .rotationEffect(.degrees(-3))
                         .padding(.bottom, 4)
                 }
                 
