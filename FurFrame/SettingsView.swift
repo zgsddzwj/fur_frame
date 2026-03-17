@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import Photos
+import Combine
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -143,53 +144,151 @@ struct SettingsView: View {
 struct ScanningPageView: View {
     @ObservedObject var scanner: PetScanner
     let onComplete: () -> Void
-    @State private var rotation: Double = 0
+    
+    @State private var pawOffset: CGFloat = 0
+    @State private var dotCount = 0
+    @State private var timerCancellable: Cancellable?
     
     var body: some View {
         ZStack {
-            Color.appBackground.ignoresSafeArea()
+            // Gradient background
+            LinearGradient(
+                colors: [
+                    Color(hex: "F9F9F7"),
+                    Color(hex: "FFF8F5")
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
             
-            VStack(spacing: 32) {
+            VStack(spacing: 48) {
                 Spacer()
                 
-                ProgressRing(
-                    progress: scanner.progress,
-                    lineWidth: 8,
-                    color: .appOrange
-                )
-                .frame(width: 140, height: 140)
-                
-                VStack(spacing: 8) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "gear")
-                            .font(.system(size: 16))
-                            .foregroundColor(.appOrange)
-                            .rotationEffect(.degrees(rotation))
-                            .onAppear {
-                                withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
-                                    rotation = 360
-                                }
-                            }
-                        
-                        Text(scanner.progressText)
-                            .font(.appCalloutMedium)
-                            .foregroundColor(.appTextPrimary)
+                // Animated paw print
+                ZStack {
+                    // Outer glow circles
+                    ForEach(0..<3) { i in
+                        Circle()
+                            .stroke(Color.appOrange.opacity(0.1), lineWidth: 1)
+                            .frame(width: 160 + CGFloat(i * 40), height: 160 + CGFloat(i * 40))
+                            .scaleEffect(1 + pawOffset * 0.05)
+                            .animation(
+                                .easeInOut(duration: 2)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(i) * 0.3),
+                                value: pawOffset
+                            )
                     }
                     
-                    Text("Organizing memories locally...")
-                        .font(.appFootnote)
-                        .foregroundColor(.appTextSecondary)
+                    // Main paw icon
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.appOrange, Color.appOrange.opacity(0.8)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 120, height: 120)
+                        
+                        Image(systemName: "pawprint.fill")
+                            .font(.system(size: 50))
+                            .foregroundColor(.white)
+                    }
+                    .offset(y: pawOffset)
+                    .onAppear {
+                        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                            pawOffset = -8
+                        }
+                    }
+                }
+                
+                // Progress info
+                VStack(spacing: 20) {
+                    // Progress bar
+                    VStack(spacing: 12) {
+                        HStack {
+                            Text("\(Int(scanner.progress * 100))%")
+                                .font(.system(size: 28, weight: .bold, design: .rounded))
+                                .foregroundColor(.appTextPrimary)
+                            
+                            Spacer()
+                            
+                            Text("\(scanner.foundCount) pets found")
+                                .font(.appCallout)
+                                .foregroundColor(.appOrange)
+                        }
+                        
+                        // Progress track
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color.appOrange.opacity(0.15))
+                                    .frame(height: 8)
+                                
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [Color.appOrange, Color(hex: "FF8C61")],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                    .frame(width: geo.size.width * scanner.progress, height: 8)
+                                    .animation(.easeInOut(duration: 0.3), value: scanner.progress)
+                            }
+                        }
+                        .frame(height: 8)
+                    }
+                    .padding(.horizontal, 40)
+                    
+                    // Status text with animated dots
+                    VStack(spacing: 8) {
+                        Text(displayText)
+                            .font(.appHeadline3)
+                            .foregroundColor(.appTextPrimary)
+                        
+                        Text("Photos never leave your device")
+                            .font(.appCaption)
+                            .foregroundColor(.appTextSecondary)
+                    }
                 }
                 
                 Spacer()
             }
+            .padding(.vertical, 60)
+        }
+        .onAppear {
+            // Start timer for dots animation
+            let timer = Timer.publish(every: 0.5, on: .main, in: .common)
+            timerCancellable = timer.sink { _ in
+                if !scanner.hasScanned {
+                    dotCount = (dotCount + 1) % 4
+                }
+            }
+            timer.connect()
         }
         .onChange(of: scanner.hasScanned) { _, hasScanned in
             if hasScanned {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                // Stop timer and trigger completion
+                timerCancellable?.cancel()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                     onComplete()
                 }
             }
+        }
+        .onDisappear {
+            timerCancellable?.cancel()
+        }
+    }
+    
+    private var displayText: String {
+        if scanner.hasScanned {
+            return "Done!"
+        } else {
+            return scanner.progressText + String(repeating: ".", count: dotCount)
         }
     }
 }
