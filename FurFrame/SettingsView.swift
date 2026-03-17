@@ -14,10 +14,12 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var assets: [PetAsset]
     @Query(filter: #Predicate<PetAsset> { $0.isFavorite == true }) private var favoriteAssets: [PetAsset]
+    @Query(filter: #Predicate<PetAsset> { $0.isHidden == true }) private var hiddenAssets: [PetAsset]
     @State private var showPaywall = false
     @State private var showScanningView = false
     @StateObject private var scanner = PetScanner(modelContext: ModelContext(try! ModelContainer(for: Schema([PetAsset.self]))))
     @State private var showFavorites = false
+    @State private var showHiddenPets = false
     @AppStorage("isPro", store: UserDefaults(suiteName: "group.com.furframe.app")) var isPro: Bool = false
     
     var body: some View {
@@ -48,8 +50,8 @@ struct SettingsView: View {
                             
                             Divider().padding(.leading, 16)
                             
-                            SettingsRow(title: "Hidden Pets", value: "0") {
-                                // Hidden pets action
+                            SettingsRow(title: "Hidden Pets", value: "\(hiddenAssets.count)") {
+                                showHiddenPets = true
                             }
                         }
                         
@@ -117,6 +119,9 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showFavorites) {
             FavoritesSheetView()
+        }
+        .sheet(isPresented: $showHiddenPets) {
+            HiddenPetsSheetView()
         }
         .fullScreenCover(isPresented: $showScanningView) {
             ScanningPageView(scanner: scanner, onComplete: {
@@ -380,6 +385,115 @@ struct EmptyFavoritesView: View {
                 .foregroundColor(.appTextSecondary)
             
             Text("Tap the heart icon on photos\nto add them here.")
+                .font(.appCallout)
+                .foregroundColor(.appTextTertiary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+            
+            Spacer()
+        }
+    }
+}
+
+// MARK: - Hidden Pets Sheet View
+struct HiddenPetsSheetView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Query(filter: #Predicate<PetAsset> { $0.isHidden == true }, sort: \.creationDate, order: .reverse) private var hiddenAssets: [PetAsset]
+    
+    private let columns = [
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8)
+    ]
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.white.ignoresSafeArea()
+                
+                if hiddenAssets.isEmpty {
+                    EmptyHiddenPetsView()
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 8) {
+                            ForEach(hiddenAssets) { asset in
+                                HiddenPetThumbnail(asset: asset) {
+                                    // Unhide action
+                                    withAnimation(.spring()) {
+                                        asset.isHidden = false
+                                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                        .padding(.bottom, 34)
+                    }
+                }
+            }
+            .navigationTitle("Hidden Pets (\(hiddenAssets.count))")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .font(.appCalloutMedium)
+                    .foregroundColor(.appOrange)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Hidden Pet Thumbnail
+struct HiddenPetThumbnail: View {
+    let asset: PetAsset
+    let onUnhide: () -> Void
+    
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            PHAssetImage(
+                localIdentifier: asset.localIdentifier,
+                targetSize: CGSize(width: 300, height: 300)
+            )
+            .aspectRatio(contentMode: .fit)
+            .frame(minWidth: 0, maxWidth: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .opacity(0.6) // Dimmed to indicate hidden status
+            
+            // Unhide button
+            Button {
+                onUnhide()
+            } label: {
+                Image(systemName: "eye")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(8)
+                    .background(Color.appOrange)
+                    .clipShape(Circle())
+            }
+            .padding(8)
+        }
+    }
+}
+
+// MARK: - Empty Hidden Pets View
+struct EmptyHiddenPetsView: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            Spacer().frame(height: 100)
+            
+            Image(systemName: "eye")
+                .font(.system(size: 70))
+                .foregroundColor(.appTextTertiary)
+            
+            Text("No Hidden Pets")
+                .font(.appHeadline3)
+                .foregroundColor(.appTextSecondary)
+            
+            Text("Tap the eye icon on photos\nto hide them from the main view.")
                 .font(.appCallout)
                 .foregroundColor(.appTextTertiary)
                 .multilineTextAlignment(.center)

@@ -11,8 +11,8 @@ import Photos
 
 struct MemoriesView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \PetAsset.creationDate, order: .reverse) private var assets: [PetAsset]
-    @Query(filter: #Predicate<PetAsset> { $0.isHero == true }) private var heroAssets: [PetAsset]
+    @Query(filter: #Predicate<PetAsset> { $0.isHidden == false }, sort: \.creationDate, order: .reverse) private var assets: [PetAsset]
+    @Query(filter: #Predicate<PetAsset> { $0.isHero == true && $0.isHidden == false }) private var heroAssets: [PetAsset]
     @Namespace private var animation
     @State private var selectedAsset: PetAsset?
     @State private var heroRefreshTrigger = UUID()
@@ -451,18 +451,36 @@ struct PetCard: View {
                     validateAsset(asset)
                 }
             
-            Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                    asset.isFavorite.toggle()
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            VStack(spacing: 8) {
+                // Hide button
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                        asset.isHidden = true
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    }
+                } label: {
+                    Image(systemName: "eye.slash")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(10)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
                 }
-            } label: {
-                Image(systemName: asset.isFavorite ? "heart.fill" : "heart")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(asset.isFavorite ? .appError : .white)
-                    .padding(10)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Circle())
+                
+                // Favorite button
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                        asset.isFavorite.toggle()
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    }
+                } label: {
+                    Image(systemName: asset.isFavorite ? "heart.fill" : "heart")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(asset.isFavorite ? .appError : .white)
+                        .padding(10)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
+                }
             }
             .padding(10)
         }

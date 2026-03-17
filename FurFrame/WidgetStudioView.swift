@@ -42,9 +42,9 @@ struct WidgetStudioView: View {
     @AppStorage("widgetAlbumSource", store: UserDefaults(suiteName: "group.com.furframe.app")) var albumSource: String = "All Pets"
     @AppStorage("isPro", store: UserDefaults(suiteName: "group.com.furframe.app")) var isPro: Bool = false
     
-    @Query(sort: \PetAsset.creationDate, order: .reverse) private var allAssets: [PetAsset]
-    @Query(filter: #Predicate<PetAsset> { $0.isFavorite == true }, sort: \.creationDate, order: .reverse) private var favoriteAssets: [PetAsset]
-    @Query(filter: #Predicate<PetAsset> { $0.isHero == true }) private var heroAssets: [PetAsset]
+    @Query(filter: #Predicate<PetAsset> { $0.isHidden == false }, sort: \.creationDate, order: .reverse) private var allAssets: [PetAsset]
+    @Query(filter: #Predicate<PetAsset> { $0.isFavorite == true && $0.isHidden == false }, sort: \.creationDate, order: .reverse) private var favoriteAssets: [PetAsset]
+    @Query(filter: #Predicate<PetAsset> { $0.isHero == true && $0.isHidden == false }) private var heroAssets: [PetAsset]
     
     @State private var showPaywall = false
     @State private var showStandByPreview = false
