@@ -426,7 +426,7 @@ struct PetCard: View {
     @Environment(\.modelContext) private var modelContext
     @State private var height: CGFloat = 0
     @State private var isPressing = false
-    @State private var showBling = false
+    @State private var showHideButton = false
     
     init(asset: PetAsset, namespace: Namespace.ID, isSelected: Bool, validateAsset: @escaping (PetAsset) -> Void, onTap: @escaping (PetAsset) -> Void) {
         self.asset = asset
@@ -449,51 +449,59 @@ struct PetCard: View {
                 .scaleEffect(isPressing ? 0.96 : 1.0)
                 .overlay(
                     RoundedRectangle(cornerRadius: .appRadiusLarge)
-                        .fill(Color.black.opacity(isPressing ? 0.15 : 0))
+                        .fill(Color.black.opacity(showHideButton ? 0.3 : 0))
                 )
                 .onTapGesture {
-                    onTap(asset)
+                    if showHideButton {
+                        withAnimation(.spring()) {
+                            showHideButton = false
+                        }
+                    } else {
+                        onTap(asset)
+                    }
                 }
-                .onLongPressGesture(minimumDuration: 0.4, pressing: { pressing in
+                .onLongPressGesture(minimumDuration: 0.3, pressing: { pressing in
                     withAnimation(.spring(response: 0.3)) {
                         isPressing = pressing
                     }
-                }) {
-                    // Long press completed - hide photo
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                        asset.isHidden = true
+                    if pressing {
                         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    }
+                }) {
+                    // Long press completed - show hide button
+                    withAnimation(.spring()) {
+                        showHideButton = true
                     }
                 }
                 .onAppear {
                     validateAsset(asset)
                 }
             
-            // Hide hint overlay when pressing
-            if isPressing {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        HStack(spacing: 4) {
-                            Image(systemName: "eye.slash")
-                            Text("Hide")
+            // Hide button overlay
+            if showHideButton {
+                VStack(spacing: 12) {
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                            asset.isHidden = true
+                            showHideButton = false
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         }
-                        .font(.appCaptionMedium)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "eye.slash")
+                                .font(.system(size: 14))
+                            Text("Hide")
+                                .font(.appCaptionMedium)
+                        }
                         .foregroundColor(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .padding(8)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(Color.black.opacity(0.7))
+                        )
                     }
                 }
-            }
-            
-            // Bling effect overlay
-            if showBling {
-                BlingEffect()
-                    .clipShape(RoundedRectangle(cornerRadius: .appRadiusLarge))
             }
             
             // Favorite button - always visible at bottom right
@@ -504,74 +512,18 @@ struct PetCard: View {
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                             asset.isFavorite.toggle()
-                            if asset.isFavorite {
-                                triggerBling()
-                            }
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         }
                     } label: {
-                        ZStack {
-                            // Bling animation background
-                            if asset.isFavorite {
-                                Circle()
-                                    .fill(Color.appError.opacity(0.3))
-                                    .frame(width: 44, height: 44)
-                                    .scaleEffect(showBling ? 1.5 : 1.0)
-                                    .opacity(showBling ? 0 : 1)
-                            }
-                            
-                            Image(systemName: asset.isFavorite ? "heart.fill" : "heart")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(asset.isFavorite ? .appError : .white)
-                                .padding(10)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
-                                .scaleEffect(asset.isFavorite ? 1.1 : 1.0)
-                        }
+                        Image(systemName: asset.isFavorite ? "heart.fill" : "heart")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(asset.isFavorite ? .appError : .white)
+                            .padding(10)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
                     }
                     .padding(8)
                 }
-            }
-        }
-    }
-    
-    private func triggerBling() {
-        showBling = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            withAnimation(.easeOut(duration: 0.2)) {
-                showBling = false
-            }
-        }
-    }
-}
-
-// MARK: - Bling Effect
-struct BlingEffect: View {
-    @State private var scale: CGFloat = 0.5
-    @State private var opacity: Double = 1
-    
-    var body: some View {
-        ZStack {
-            // Star burst
-            ForEach(0..<8) { i in
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(Color.appError)
-                    .frame(width: 4, height: 20)
-                    .offset(y: -30)
-                    .rotationEffect(.degrees(Double(i) * 45))
-            }
-            
-            // Center flash
-            Circle()
-                .fill(Color.appError.opacity(0.5))
-                .frame(width: 60, height: 60)
-        }
-        .scaleEffect(scale)
-        .opacity(opacity)
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.3)) {
-                scale = 2.0
-                opacity = 0
             }
         }
     }
