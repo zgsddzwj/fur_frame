@@ -15,8 +15,8 @@ struct SettingsView: View {
     @Query private var assets: [PetAsset]
     @Query(filter: #Predicate<PetAsset> { $0.isFavorite == true }) private var favoriteAssets: [PetAsset]
     @State private var showPaywall = false
-    @State private var isScanning = false
-    @State private var scanProgress = 0.0
+    @State private var showScanningView = false
+    @StateObject private var scanner = PetScanner(modelContext: ModelContext(try! ModelContainer(for: Schema([PetAsset.self]))))
     @State private var showFavorites = false
     @AppStorage("isPro", store: UserDefaults(suiteName: "group.com.furframe.app")) var isPro: Bool = false
     
@@ -36,21 +36,8 @@ struct SettingsView: View {
                         
                         // LIBRARY Section
                         SettingsSection(title: "LIBRARY") {
-                            if isScanning {
-                                HStack {
-                                    ProgressView(value: scanProgress)
-                                        .progressViewStyle(LinearProgressViewStyle(tint: .appOrange))
-                                    Text("\(Int(scanProgress * 100))%")
-                                        .font(.appCaption)
-                                        .foregroundColor(.appTextSecondary)
-                                        .frame(width: 40)
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                            } else {
-                                SettingsRow(title: "Rescan Photo Library", icon: nil) {
-                                    self.startRescan()
-                                }
+                            SettingsRow(title: "Rescan Photo Library", icon: nil) {
+                                self.startRescan()
                             }
                             
                             Divider().padding(.leading, 16)
@@ -131,34 +118,72 @@ struct SettingsView: View {
         .sheet(isPresented: $showFavorites) {
             FavoritesSheetView()
         }
+        .fullScreenCover(isPresented: $showScanningView) {
+            ScanningPageView(scanner: scanner, onComplete: {
+                showScanningView = false
+            })
+        }
     }
     
     private func startRescan() {
-        guard !isScanning else { return }
+        showScanningView = true
         
-        isScanning = true
-        scanProgress = 0.0
-        
-        Task { [self] in
-            let scanner = PetScanner(modelContext: modelContext)
-            
-            // 监听进度
-            let progressTask = Task { [self] in
-                while isScanning {
-                    await MainActor.run {
-                        self.scanProgress = scanner.progress
-                    }
-                    try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
-                }
-            }
-            
+        Task {
             await scanner.startScan(incremental: false)
+        }
+    }
+}
+
+// MARK: - Scanning Page View
+struct ScanningPageView: View {
+    @ObservedObject var scanner: PetScanner
+    let onComplete: () -> Void
+    @State private var rotation: Double = 0
+    
+    var body: some View {
+        ZStack {
+            Color.appBackground.ignoresSafeArea()
             
-            // 扫描完成
-            progressTask.cancel()
-            await MainActor.run {
-                self.isScanning = false
-                self.scanProgress = 1.0
+            VStack(spacing: 32) {
+                Spacer()
+                
+                ProgressRing(
+                    progress: scanner.progress,
+                    lineWidth: 8,
+                    color: .appOrange
+                )
+                .frame(width: 140, height: 140)
+                
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "gear")
+                            .font(.system(size: 16))
+                            .foregroundColor(.appOrange)
+                            .rotationEffect(.degrees(rotation))
+                            .onAppear {
+                                withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
+                                    rotation = 360
+                                }
+                            }
+                        
+                        Text(scanner.progressText)
+                            .font(.appCalloutMedium)
+                            .foregroundColor(.appTextPrimary)
+                    }
+                    
+                    Text("Organizing memories locally...")
+                        .font(.appFootnote)
+                        .foregroundColor(.appTextSecondary)
+                }
+                
+                Spacer()
+            }
+        }
+        .onChange(of: scanner.hasScanned) { _, hasScanned in
+            if hasScanned {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    onComplete()
+                }
             }
         }
     }
