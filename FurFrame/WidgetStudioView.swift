@@ -386,25 +386,26 @@ struct PolaroidWidgetPreview: View {
                             .background(Color.appOrange.opacity(0.15))
                     }
                 }
-                .frame(height: geo.size.height * (showDate ? 0.65 : 0.75))
+                .frame(height: geo.size.height * (showDate ? 0.78 : 0.82))
                 .padding(.horizontal, 12)
                 .padding(.top, 12)
                 .clipped()
                 
-                Spacer()
-                
                 if showDate, let date = date {
                     // Handwritten date style
                     Text(date.formatted(date: .abbreviated, time: .omitted))
-                        .font(.system(size: min(12, geo.size.height * 0.06), design: .serif))
+                        .font(.system(size: min(11, geo.size.height * 0.04), design: .serif))
                         .foregroundColor(.appTextSecondary)
-                        .padding(.bottom, 4)
+                        .padding(.top, 4)
+                        .padding(.bottom, 0)
                 }
                 
+                Spacer(minLength: 4)
+                
                 Text("memories")
-                    .font(.system(size: min(14, geo.size.height * 0.08), design: .serif))
+                    .font(.system(size: min(13, geo.size.height * 0.05), design: .serif))
                     .foregroundColor(.appTextSecondary)
-                    .padding(.bottom, geo.size.height > 200 ? 20 : 12)
+                    .padding(.bottom, geo.size.height > 200 ? 12 : 8)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.white)
@@ -689,17 +690,20 @@ struct ThemeThumbnailButton: View {
     
     @ViewBuilder
     private var themeThumbnail: some View {
+        // Use placeholder image from Assets, or nil if not available
+        let placeholderImage = UIImage(named: "placeholder")
+        
         switch theme {
         case .minimal:
-            MinimalWidgetPreview(image: nil)
+            MinimalWidgetPreview(image: placeholderImage)
         case .polaroid:
-            PolaroidWidgetPreview(image: nil, showDate: false)
+            PolaroidWidgetPreview(image: placeholderImage, showDate: false)
         case .film:
-            FilmWidgetPreview(image: nil)
+            FilmWidgetPreview(image: placeholderImage)
         case .polaroidDate:
-            PolaroidWidgetPreview(image: nil, showDate: true, date: Date())
+            PolaroidWidgetPreview(image: placeholderImage, showDate: true, date: Date())
         case .standbyClock:
-            StandByClockWidgetPreview(image: nil)
+            StandByClockWidgetPreview(image: placeholderImage)
         }
     }
 }

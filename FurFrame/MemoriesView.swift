@@ -111,6 +111,12 @@ struct MemoriesView: View {
                 }
                 .coordinateSpace(name: "scroll")
                 .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+                    // Cancel hide button when scrolling
+                    if selectedForHide != nil && abs(value - scrollOffset) > 5 {
+                        withAnimation(.spring()) {
+                            selectedForHide = nil
+                        }
+                    }
                     scrollOffset = value
                 }
             }
@@ -460,23 +466,24 @@ struct PetCard: View {
     
     var body: some View {
         ZStack {
-            // Photo with press animation
+            // Base photo
             PHAssetImage(localIdentifier: asset.localIdentifier, targetSize: CGSize(width: 400, height: 400))
                 .aspectRatio(contentMode: .fit)
                 .frame(minWidth: 0, maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: .appRadiusLarge))
                 .matchedGeometryEffect(id: asset.localIdentifier, in: namespace, isSource: !isSelected)
-                .scaleEffect(isPressing ? 0.96 : 1.0)
                 .overlay(
                     RoundedRectangle(cornerRadius: .appRadiusLarge)
-                        .fill(Color.black.opacity(isSelectedForHide ? 0.3 : 0))
+                        .fill(Color.black.opacity(isSelectedForHide ? 0.3 : (isPressing ? 0.15 : 0)))
                 )
                 .onTapGesture {
                     if isSelectedForHide {
+                        // Tap to cancel hide selection
                         withAnimation(.spring()) {
-                            onLongPress(asset) // Toggle off
+                            onLongPress(asset)
                         }
                     } else {
+                        // Normal tap - go to detail
                         onTap(asset)
                     }
                 }
@@ -484,45 +491,17 @@ struct PetCard: View {
                     withAnimation(.spring(response: 0.3)) {
                         isPressing = pressing
                     }
-                    if pressing {
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    }
                 }) {
-                    // Long press completed - toggle hide selection
+                    // Long press completed - trigger feedback and toggle hide selection
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     onLongPress(asset)
                 }
                 .onAppear {
                     validateAsset(asset)
                 }
             
-            // Hide button overlay (only for selected card)
-            if isSelectedForHide {
-                VStack(spacing: 12) {
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                            asset.isHidden = true
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "eye.slash")
-                                .font(.system(size: 14))
-                            Text("Hide")
-                                .font(.appCaptionMedium)
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(
-                            Capsule()
-                                .fill(Color.black.opacity(0.7))
-                        )
-                    }
-                }
-            }
-            
-            // Favorite button - always visible at bottom right, positioned relative to card
-            GeometryReader { geo in
+            // Favorite button - fixed position overlay
+            .overlay(
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                         asset.isFavorite.toggle()
@@ -536,10 +515,39 @@ struct PetCard: View {
                         .background(.ultraThinMaterial)
                         .clipShape(Circle())
                 }
-                .position(x: geo.size.width - 24, y: geo.size.height - 24)
-            }
+                .padding(10),
+                alignment: .bottomTrailing
+            )
+            
+            // Hide button - centered overlay
+            .overlay(
+                Group {
+                    if isSelectedForHide {
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                asset.isHidden = true
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "eye.slash")
+                                    .font(.system(size: 14))
+                                Text("Hide")
+                                    .font(.appCaptionMedium)
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule()
+                                    .fill(Color.black.opacity(0.7))
+                            )
+                        }
+                    }
+                },
+                alignment: .center
+            )
         }
-        .frame(height: height)
     }
 }
 
