@@ -68,7 +68,11 @@ class PetScanner: ObservableObject {
     }
     
     func startScan(incremental: Bool = false) async {
-        guard accessStatus == .authorized || accessStatus == .limited else { return }
+        guard accessStatus == .authorized || accessStatus == .limited else { 
+            logger.error("没有权限扫描")
+            hasScanned = true
+            return 
+        }
         guard !isScanning else { return }
         
         // Cancel any existing scan
@@ -83,6 +87,9 @@ class PetScanner: ObservableObject {
         
         logger.info("开始扫描照片库")
         
+        // 添加小延迟确保 UI 更新
+        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1秒
+        
         // Fetch assets first
         let assets = await fetchAssets(incremental: incremental)
         let total = assets.count
@@ -94,6 +101,7 @@ class PetScanner: ObservableObject {
             isScanning = false
             hasScanned = true
             debugLog += "没有照片需要扫描\n"
+            logger.info("照片库为空，扫描结束")
             return
         }
         
@@ -118,7 +126,10 @@ class PetScanner: ObservableObject {
         
         for i in 0..<total {
             // Check for cancellation
-            if Task.isCancelled { break }
+            if Task.isCancelled { 
+                logger.info("扫描被取消")
+                break 
+            }
             
             let asset = assets[i]
             let currentProgress = Double(i + 1) / Double(total)
@@ -130,7 +141,9 @@ class PetScanner: ObservableObject {
             }
             
             // Update UI progress
-            progress = currentProgress
+            await MainActor.run {
+                progress = currentProgress
+            }
             
             // Check if already in database
             if !incremental {
@@ -141,12 +154,25 @@ class PetScanner: ObservableObject {
                 }
             }
             
-            // Analyze asset - 每5张照片yield一次让UI更新
-            let (foundPet, debugInfo) = await analyzeAsset(asset, imageManager: imageManager, requestOptions: requestOptions)
+            // Analyze asset with timeout to prevent hanging
+            let analyzeTask = Task {
+                await analyzeAsset(asset, imageManager: imageManager, requestOptions: requestOptions)
+            }
+            
+            // 5秒超时
+            let timeoutTask = Task {
+                try? await Task.sleep(nanoseconds: 5_000_000_000) // 5秒
+                analyzeTask.cancel()
+            }
+            
+            let (foundPet, debugInfo) = await analyzeTask.value
+            timeoutTask.cancel()
             
             if foundPet {
                 foundPetsCount += 1
-                foundCount += 1
+                await MainActor.run {
+                    foundCount += 1
+                }
             }
             
             processedCount += 1
@@ -156,16 +182,17 @@ class PetScanner: ObservableObject {
                 debugLog += debugInfo + "\n"
             }
             
-            // 每5张照片让出时间片给UI
-            if i % 5 == 0 {
-                try? await Task.sleep(nanoseconds: 1_000_000) // 1ms
-            }
+            // 每张照片让出时间片给UI，避免卡住
+            try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
         }
         
         UserDefaults.standard.set(Date(), forKey: "lastScanDate")
-        isScanning = false
-        hasScanned = true
-        progress = 1.0
+        await MainActor.run {
+            isScanning = false
+            hasScanned = true
+            progress = 1.0
+            progressText = "Done!"
+        }
         debugLog += "\n扫描完成！处理了 \(processedCount) 张照片，找到 \(foundPetsCount) 个宠物\n"
         logger.info("扫描完成！处理了 \(processedCount) 张照片，找到 \(foundPetsCount) 个宠物")
     }
