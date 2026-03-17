@@ -6,6 +6,8 @@
 //
 
 import SwiftUI
+import SwiftData
+import Photos
 import WidgetKit
 
 enum WidgetSize: String, CaseIterable, Identifiable {
@@ -40,11 +42,38 @@ struct WidgetStudioView: View {
     @AppStorage("widgetAlbumSource", store: UserDefaults(suiteName: "group.com.furframe.app")) var albumSource: String = "All Pets"
     @AppStorage("isPro", store: UserDefaults(suiteName: "group.com.furframe.app")) var isPro: Bool = false
     
-    @Environment(\.dismiss) private var dismiss
+    @Query(sort: \PetAsset.creationDate, order: .reverse) private var allAssets: [PetAsset]
+    @Query(filter: #Predicate<PetAsset> { $0.isFavorite == true }, sort: \.creationDate, order: .reverse) private var favoriteAssets: [PetAsset]
+    @Query(filter: #Predicate<PetAsset> { $0.isHero == true }) private var heroAssets: [PetAsset]
+    
     @State private var showPaywall = false
     @State private var showStandByPreview = false
     @State private var animatePreview = false
     @State private var selectedTab = 0 // 0: Themes, 1: Source
+    @State private var previewImage: UIImage?
+    @State private var displayedAssetId: String = ""
+    
+    var displayedAssets: [PetAsset] {
+        albumSource == "Favorites Only" ? favoriteAssets : allAssets
+    }
+    
+    // 计算当前应该显示哪张照片
+    var currentDisplayAsset: PetAsset? {
+        // 如果当前设置的是 Favorites Only，但收藏列表为空，返回 nil
+        if displayedAssets.isEmpty {
+            return nil
+        }
+        // 如果有 Hero 照片且在列表中，优先显示 Hero
+        if let hero = heroAssets.first, displayedAssets.contains(where: { $0.localIdentifier == hero.localIdentifier }) {
+            return hero
+        }
+        // 如果之前显示的照片还在列表中，继续显示它
+        if !displayedAssetId.isEmpty, let existing = displayedAssets.first(where: { $0.localIdentifier == displayedAssetId }) {
+            return existing
+        }
+        // 否则显示列表中的第一张
+        return displayedAssets.first
+    }
     
     var body: some View {
         NavigationStack {
@@ -58,13 +87,31 @@ struct WidgetStudioView: View {
                         .padding(.top, .appSpacingMedium)
                     
                     // Preview Area
-                    PreviewArea(size: selectedSize, theme: selectedTheme, animate: animatePreview)
-                        .onChange(of: selectedSize) { _, _ in
-                            triggerPreviewAnimation()
-                        }
-                        .onChange(of: selectedTheme) { _, _ in
-                            triggerPreviewAnimation()
-                        }
+                    PreviewArea(
+                        size: selectedSize,
+                        theme: selectedTheme,
+                        currentAsset: currentDisplayAsset,
+                        previewImage: previewImage,
+                        animate: animatePreview
+                    )
+                    .onChange(of: selectedSize) { _, _ in
+                        triggerPreviewAnimation()
+                    }
+                    .onChange(of: selectedTheme) { _, _ in
+                        triggerPreviewAnimation()
+                    }
+                    .onChange(of: albumSource) { _, _ in
+                        loadPreviewImage()
+                        triggerPreviewAnimation()
+                    }
+                    .onChange(of: displayedAssets) { _, _ in
+                        // 数据源变化时重新加载预览
+                        loadPreviewImage()
+                        triggerPreviewAnimation()
+                    }
+                    .onAppear {
+                        loadPreviewImage()
+                    }
                     
                     // Bottom Sheet - 贴底显示
                     BottomSheet(
@@ -89,21 +136,13 @@ struct WidgetStudioView: View {
             .navigationTitle("Widget Studio")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .font(.appCalloutMedium)
-                    .foregroundColor(.appOrange)
-                }
-                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showStandByPreview = true
                     } label: {
-                        Text("StandBy")
-                            .font(.appCalloutMedium)
-                            .foregroundColor(.appOrange)
+                        Image(systemName: "iphone.gen3")
+                            .font(.system(size: 20))
+                            .foregroundColor(.appTextPrimary)
                     }
                 }
             }
@@ -122,6 +161,35 @@ struct WidgetStudioView: View {
         animatePreview = false
         withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
             animatePreview = true
+        }
+    }
+    
+    private func loadPreviewImage() {
+        guard let asset = currentDisplayAsset else {
+            previewImage = nil
+            displayedAssetId = ""
+            return
+        }
+        
+        // 记录当前显示的照片ID
+        displayedAssetId = asset.localIdentifier
+        
+        // 加载图片
+        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [asset.localIdentifier], options: nil)
+        guard let phAsset = fetchResult.firstObject else {
+            previewImage = nil
+            return
+        }
+        
+        let targetSize = CGSize(width: 600, height: 600)
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .highQualityFormat
+        options.isNetworkAccessAllowed = true
+        
+        PHImageManager.default().requestImage(for: phAsset, targetSize: targetSize, contentMode: .aspectFill, options: options) { image, _ in
+            DispatchQueue.main.async {
+                self.previewImage = image
+            }
         }
     }
 }
@@ -158,6 +226,8 @@ struct SizePicker: View {
 struct PreviewArea: View {
     let size: WidgetSize
     let theme: WidgetTheme
+    let currentAsset: PetAsset?
+    let previewImage: UIImage?
     let animate: Bool
     
     var body: some View {
@@ -166,12 +236,17 @@ struct PreviewArea: View {
                 Color.appSecondaryBackground
                 
                 // Widget Preview
-                WidgetPreviewCard(size: size, theme: theme, maxHeight: geo.size.height)
-                    .shadow(color: .black.opacity(0.1), radius: 30, x: 0, y: 15)
-                    .scaleEffect(animate ? 1.0 : 0.95)
-                    .opacity(animate ? 1.0 : 0.7)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.7), value: animate)
-                    .rotationEffect(.degrees(theme == .polaroid ? -2 : 0))
+                WidgetPreviewCard(
+                    size: size,
+                    theme: theme,
+                    previewImage: previewImage,
+                    maxHeight: geo.size.height
+                )
+                .shadow(color: .black.opacity(0.1), radius: 30, x: 0, y: 15)
+                .scaleEffect(animate ? 1.0 : 0.95)
+                .opacity(animate ? 1.0 : 0.7)
+                .animation(.spring(response: 0.4, dampingFraction: 0.7), value: animate)
+                .rotationEffect(.degrees(theme == .polaroid ? -2 : 0))
             }
         }
         .frame(maxHeight: .infinity)
@@ -182,6 +257,7 @@ struct PreviewArea: View {
 struct WidgetPreviewCard: View {
     let size: WidgetSize
     let theme: WidgetTheme
+    let previewImage: UIImage?
     var maxHeight: CGFloat = .infinity
     
     var body: some View {
@@ -190,11 +266,11 @@ struct WidgetPreviewCard: View {
         ZStack {
             switch theme {
             case .minimal:
-                MinimalWidgetPreview()
+                MinimalWidgetPreview(image: previewImage)
             case .polaroid:
-                PolaroidWidgetPreview()
+                PolaroidWidgetPreview(image: previewImage)
             case .film:
-                FilmWidgetPreview()
+                FilmWidgetPreview(image: previewImage)
             }
         }
         .frame(width: frameSize.width, height: min(frameSize.height, maxHeight * 0.95))
@@ -221,14 +297,23 @@ struct WidgetPreviewCard: View {
 
 // MARK: - Theme Previews
 struct MinimalWidgetPreview: View {
+    let image: UIImage?
+    
     var body: some View {
         ZStack {
-            Image(systemName: "dog.fill")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .foregroundColor(.appOrange.opacity(0.8))
-                .padding(20)
-                .background(Color.appOrange.opacity(0.2))
+            if let image = image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                Image(systemName: "dog.fill")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .foregroundColor(.appOrange.opacity(0.8))
+                    .padding(20)
+                    .background(Color.appOrange.opacity(0.2))
+            }
             
             // Small watermark
             VStack {
@@ -243,27 +328,37 @@ struct MinimalWidgetPreview: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.appOrange.opacity(0.3))
+        .background(image == nil ? Color.appOrange.opacity(0.3) : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: .appRadiusLarge))
     }
 }
 
 struct PolaroidWidgetPreview: View {
+    let image: UIImage?
+    
     var body: some View {
         GeometryReader { geo in
             VStack(spacing: 0) {
                 // 图片区域 - 根据高度自适应
                 ZStack {
-                    Image(systemName: "dog.fill")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .foregroundColor(.appOrange)
-                        .padding(geo.size.height > 200 ? 30 : 15)
-                        .background(Color.appOrange.opacity(0.15))
+                    if let image = image {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        Image(systemName: "dog.fill")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .foregroundColor(.appOrange)
+                            .padding(geo.size.height > 200 ? 30 : 15)
+                            .background(Color.appOrange.opacity(0.15))
+                    }
                 }
                 .frame(height: geo.size.height * 0.75) // 图片占75%高度
                 .padding(.horizontal, 12)
                 .padding(.top, 12)
+                .clipped()
                 
                 Spacer()
                 
@@ -281,50 +376,58 @@ struct PolaroidWidgetPreview: View {
 }
 
 struct FilmWidgetPreview: View {
+    let image: UIImage?
+    
     var body: some View {
         GeometryReader { geo in
             ZStack {
                 Color.black
                 
-                // 主图片区域
+                // Photo area
                 ZStack {
-                    Image(systemName: "cat.fill")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .foregroundColor(.white.opacity(0.9))
-                        .padding(geo.size.height > 200 ? 40 : 20)
-                        .background(Color.gray.opacity(0.3))
+                    if let image = image {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 12)
+                    } else {
+                        Color.gray.opacity(0.3)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 12)
+                    }
                     
                     // Vignette
                     RadialGradient(
-                        colors: [.clear, .black.opacity(0.5)],
+                        colors: [.clear, .black.opacity(0.4)],
                         center: .center,
-                        startRadius: geo.size.height * 0.2,
-                        endRadius: geo.size.height * 0.5
+                        startRadius: geo.size.width * 0.2,
+                        endRadius: geo.size.width * 0.5
                     )
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
                 }
-                .padding(.horizontal, geo.size.height > 200 ? 30 : 16)
-                .padding(.vertical, geo.size.height > 200 ? 20 : 12)
                 
-                // Film holes - 根据高度调整数量
+                // Film holes
                 HStack {
                     VStack(spacing: geo.size.height > 200 ? 12 : 6) {
                         ForEach(0..<(geo.size.height > 200 ? 6 : 4)) { _ in
                             RoundedRectangle(cornerRadius: 1)
-                                .fill(Color.appGold.opacity(0.8))
-                                .frame(width: 5, height: 8)
+                                .fill(Color(hex: "FFD60A").opacity(0.8))
+                                .frame(width: 5, height: geo.size.height > 200 ? 8 : 6)
                         }
                     }
                     Spacer()
                     VStack(spacing: geo.size.height > 200 ? 12 : 6) {
                         ForEach(0..<(geo.size.height > 200 ? 6 : 4)) { _ in
                             RoundedRectangle(cornerRadius: 1)
-                                .fill(Color.appGold.opacity(0.8))
-                                .frame(width: 5, height: 8)
+                                .fill(Color(hex: "FFD60A").opacity(0.8))
+                                .frame(width: 5, height: geo.size.height > 200 ? 8 : 6)
                         }
                     }
                 }
-                .padding(.horizontal, 6)
+                .padding(.horizontal, 5)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: .appRadiusMedium))
@@ -470,11 +573,11 @@ struct ThemeThumbnailButton: View {
     private var themeThumbnail: some View {
         switch theme {
         case .minimal:
-            MinimalWidgetPreview()
+            MinimalWidgetPreview(image: nil)
         case .polaroid:
-            PolaroidWidgetPreview()
+            PolaroidWidgetPreview(image: nil)
         case .film:
-            FilmWidgetPreview()
+            FilmWidgetPreview(image: nil)
         }
     }
 }

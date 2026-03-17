@@ -13,9 +13,11 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query private var assets: [PetAsset]
+    @Query(filter: #Predicate<PetAsset> { $0.isFavorite == true }) private var favoriteAssets: [PetAsset]
     @State private var showPaywall = false
     @State private var isScanning = false
     @State private var scanProgress = 0.0
+    @State private var showFavorites = false
     @AppStorage("isPro", store: UserDefaults(suiteName: "group.com.furframe.app")) var isPro: Bool = false
     
     var body: some View {
@@ -49,6 +51,12 @@ struct SettingsView: View {
                                 SettingsRow(title: "Rescan Photo Library", icon: nil) {
                                     self.startRescan()
                                 }
+                            }
+                            
+                            Divider().padding(.leading, 16)
+                            
+                            SettingsRow(title: "Favorites", value: "\(favoriteAssets.count)") {
+                                showFavorites = true
                             }
                             
                             Divider().padding(.leading, 16)
@@ -119,6 +127,9 @@ struct SettingsView: View {
             PaywallView()
                 .presentationDetents([.fraction(0.75)])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showFavorites) {
+            FavoritesSheetView()
         }
     }
     
@@ -243,6 +254,113 @@ struct SettingsRow: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
+        }
+    }
+}
+
+// MARK: - Favorites Sheet View
+struct FavoritesSheetView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Query(filter: #Predicate<PetAsset> { $0.isFavorite == true }, sort: \.creationDate, order: .reverse) private var favoriteAssets: [PetAsset]
+    @State private var selectedAsset: PetAsset?
+    
+    private let columns = [
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8)
+    ]
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.white.ignoresSafeArea()
+                
+                if favoriteAssets.isEmpty {
+                    EmptyFavoritesView()
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 8) {
+                            ForEach(favoriteAssets) { asset in
+                                FavoriteThumbnail(asset: asset) {
+                                    selectedAsset = asset
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                        .padding(.bottom, 34)
+                    }
+                }
+            }
+            .navigationTitle("Favorites (\(favoriteAssets.count))")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .font(.appCalloutMedium)
+                    .foregroundColor(.appOrange)
+                }
+            }
+            .fullScreenCover(item: $selectedAsset) { asset in
+                FullScreenImageView(
+                    asset: asset,
+                    namespace: Namespace().wrappedValue,
+                    onSetAsHero: {
+                        for hero in favoriteAssets.filter({ $0.isHero }) {
+                            hero.isHero = false
+                        }
+                        asset.isHero = true
+                        try? modelContext.save()
+                    },
+                    onClose: {
+                        selectedAsset = nil
+                    }
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Favorite Thumbnail
+struct FavoriteThumbnail: View {
+    let asset: PetAsset
+    let onTap: () -> Void
+    
+    var body: some View {
+        PHAssetImage(
+            localIdentifier: asset.localIdentifier,
+            targetSize: CGSize(width: 300, height: 300)
+        )
+        .aspectRatio(contentMode: .fit)
+        .frame(minWidth: 0, maxWidth: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .onTapGesture(perform: onTap)
+    }
+}
+
+// MARK: - Empty Favorites View
+struct EmptyFavoritesView: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            Spacer().frame(height: 100)
+            
+            Image(systemName: "heart.slash")
+                .font(.system(size: 70))
+                .foregroundColor(.appTextTertiary)
+            
+            Text("No Favorites Yet")
+                .font(.appHeadline3)
+                .foregroundColor(.appTextSecondary)
+            
+            Text("Tap the heart icon on photos\nto add them here.")
+                .font(.appCallout)
+                .foregroundColor(.appTextTertiary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+            
+            Spacer()
         }
     }
 }

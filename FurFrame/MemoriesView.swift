@@ -18,7 +18,6 @@ struct MemoriesView: View {
     @State private var heroRefreshTrigger = UUID()
     @State private var isPhotoLibraryLimited = false
     @State private var showSettings = false
-    @State private var showStudio = false
     @State private var scrollOffset: CGFloat = 0
     @State private var isScanning = false
     @State private var scanProgress = 0.0
@@ -108,22 +107,12 @@ struct MemoriesView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 16) {
-                        Button {
-                            showStudio = true
-                        } label: {
-                            Image(systemName: "square.grid.2x2")
-                                .font(.system(size: 20))
-                                .foregroundColor(.appTextPrimary)
-                        }
-                        
-                        Button {
-                            showSettings = true
-                        } label: {
-                            Image(systemName: "gear")
-                                .font(.system(size: 20))
-                                .foregroundColor(.appTextPrimary)
-                        }
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: "gear")
+                            .font(.system(size: 20))
+                            .foregroundColor(.appTextPrimary)
                     }
                 }
             }
@@ -132,9 +121,6 @@ struct MemoriesView: View {
             .toolbarColorScheme(.light, for: .navigationBar)
             .fullScreenCover(isPresented: $showSettings) {
                 SettingsView()
-            }
-            .fullScreenCover(isPresented: $showStudio) {
-                WidgetStudioView()
             }
             .fullScreenCover(item: $selectedAsset) { asset in
                 FullScreenImageView(
@@ -296,10 +282,8 @@ struct HeroSection: View {
                 localIdentifier: asset.localIdentifier,
                 targetSize: CGSize(width: 800, height: 600)
             )
-            .aspectRatio(contentMode: .fill)
-            .frame(height: 280)
+            .aspectRatio(contentMode: .fit)
             .frame(maxWidth: .infinity)
-            .clipped()
             .clipShape(RoundedRectangle(cornerRadius: .appRadiusXXLarge))
             .onTapGesture(perform: onTap)
             
@@ -456,9 +440,8 @@ struct PetCard: View {
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             PHAssetImage(localIdentifier: asset.localIdentifier, targetSize: CGSize(width: 400, height: 400))
-                .aspectRatio(contentMode: .fill)
+                .aspectRatio(contentMode: .fit)
                 .frame(minWidth: 0, maxWidth: .infinity)
-                .frame(height: height)
                 .clipShape(RoundedRectangle(cornerRadius: .appRadiusLarge))
                 .matchedGeometryEffect(id: asset.localIdentifier, in: namespace, isSource: !isSelected)
                 .onTapGesture {

@@ -264,8 +264,27 @@ struct ScanningView: View {
 
 // MARK: - Main Tab View
 struct MainTabView: View {
+    @State private var selectedTab = 0
+    
     var body: some View {
-        MemoriesView()
+        TabView(selection: $selectedTab) {
+            // Tab 1: Memories
+            MemoriesView()
+                .tabItem {
+                    Image(systemName: "photo.on.rectangle.angled")
+                    Text("Memories")
+                }
+                .tag(0)
+            
+            // Tab 2: Widget Studio
+            WidgetStudioView()
+                .tabItem {
+                    Image(systemName: "square.grid.2x2")
+                    Text("Studio")
+                }
+                .tag(1)
+        }
+        .tint(.appOrange)
     }
 }
 
