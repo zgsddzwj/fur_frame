@@ -3,6 +3,7 @@
 //  FurFrame
 //
 //  Design System for FurFrame
+//  Last Updated: 2026-03-19
 //
 
 import SwiftUI
